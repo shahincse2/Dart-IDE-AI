@@ -1,0 +1,33 @@
+name: dartlab
+description: >
+  A complete mobile Dart IDE — write, run, and learn Dart entirely
+  on an Android phone. No computer required.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+  flutter: '>=3.19.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+
+  # State management
+  provider: ^6.1.2
+
+  # Local storage — added properly in Phase 5 (File Management),
+  # declared now so the foundation's SettingsProvider can persist theme/font choices.
+  shared_preferences: ^2.2.3
+  path_provider: ^2.1.5
+
+flutter:
+  uses-material-design: true
+
+  # NOTE: The editor needs a monospace font for correct character
+  # alignment (line numbers, indentation). We're using the platform's
+  # built-in monospace family (GoogleFonts.mono / Courier fallback) for
+  # now — see utils/themes.dart. A bundled offline font (e.g. JetBrains
+  # Mono) can be dropped into assets/fonts/ later; do not reference an
+  # asset here until the actual .ttf file exists in this repo.
