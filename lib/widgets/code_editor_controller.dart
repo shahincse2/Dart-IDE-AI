@@ -26,6 +26,7 @@ class CodeEditorController extends TextEditingController {
         super(text: text);
 
   EditorColorScheme get scheme => _scheme;
+
   set scheme(EditorColorScheme value) {
     if (identical(_scheme, value)) return;
     _scheme = value;
@@ -78,13 +79,16 @@ class CodeEditorController extends TextEditingController {
     final trimmed = currentLine.trimRight();
 
     var indent = leading;
-    if (trimmed.endsWith('{') || trimmed.endsWith('[') || trimmed.endsWith('(')) {
+    if (trimmed.endsWith('{') ||
+        trimmed.endsWith('[') ||
+        trimmed.endsWith('(')) {
       indent = indent + (' ' * _indentSize);
     }
     if (indent.isEmpty) return newValue;
 
-    final updatedText =
-        newText.substring(0, insertPos + 1) + indent + newText.substring(insertPos + 1);
+    final updatedText = newText.substring(0, insertPos + 1) +
+        indent +
+        newText.substring(insertPos + 1);
     return TextEditingValue(
       text: updatedText,
       selection: TextSelection.collapsed(offset: insertPos + 1 + indent.length),
@@ -102,7 +106,9 @@ class CodeEditorController extends TextEditingController {
     // composing-region underline behaves correctly. Splitting spans
     // mid-composition is easy to get subtly wrong — falling back here
     // is the safer trade-off rather than faking correctness.
-    if (withComposing && value.isComposingRangeValid && !value.composing.isCollapsed) {
+    if (withComposing &&
+        value.isComposingRangeValid &&
+        !value.composing.isCollapsed) {
       return TextSpan(style: style, text: text);
     }
 
@@ -132,7 +138,8 @@ class CodeEditorController extends TextEditingController {
         text: source.substring(t.start, t.end),
         style: style?.copyWith(
           color: _colorFor(t.type),
-          backgroundColor: isBracketMatch ? _scheme.selection.withValues(alpha: 0.55) : null,
+          backgroundColor:
+              isBracketMatch ? _scheme.selection.withValues(alpha: 0.55) : null,
           fontWeight: isBracketMatch ? FontWeight.w700 : null,
         ),
       ));

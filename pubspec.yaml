@@ -22,6 +22,10 @@ dependencies:
   shared_preferences: ^2.2.3
   path_provider: ^2.1.5
 
+  # Dart execution engine (Phase 3). Runs inside a dedicated Isolate —
+  # see services/dart_runner_service.dart for why.
+  tom_d4rt: ^1.29.0
+
 flutter:
   uses-material-design: true
 

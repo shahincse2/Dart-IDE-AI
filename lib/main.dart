@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'providers/runner_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/home_screen.dart';
 import 'utils/constants.dart';
@@ -24,10 +25,13 @@ class DartLabApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => SettingsProvider()..load(),
         ),
-        // FileProvider, ProjectProvider, ConsoleProvider, RunnerProvider,
-        // and EditorProvider are added in their respective phases
-        // (5, 5, 4, 3, 2) rather than stubbed here — an empty provider
-        // with nothing to manage is unused architecture (Rule 59).
+        ChangeNotifierProvider(
+          create: (_) => RunnerProvider(),
+        ),
+        // FileProvider, ProjectProvider, ConsoleProvider, and
+        // EditorProvider are added in their respective phases (5, 5,
+        // 4, 2) rather than stubbed here — an empty provider with
+        // nothing to manage is unused architecture (Rule 59).
       ],
       child: Consumer<SettingsProvider>(
         builder: (context, settings, _) {

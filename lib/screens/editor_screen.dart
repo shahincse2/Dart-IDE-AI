@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/console_event.dart';
+import '../providers/runner_provider.dart';
 import '../providers/settings_provider.dart';
 import '../utils/constants.dart';
 import '../utils/themes.dart';
@@ -13,11 +15,13 @@ import '../widgets/coding_toolbar.dart';
 ///   - Portrait: drawer for file navigation, editor fills the rest.
 ///   - Landscape / tablet: persistent sidebar beside the editor.
 ///
-/// What's real as of Phase 2: syntax-highlighted editing, synced line
-/// numbers, current-line highlight, bracket matching, auto-indent, and
-/// the coding toolbar. Still placeholders: multi-file tabs (Phase 6),
-/// the console (Phase 4), and Save/Run (Phase 5 / Phase 3) — each
-/// arrives in its own phase rather than being faked here.
+/// What's real as of Phase 3: syntax-highlighted editing with synced
+/// line numbers/current-line/bracket-matching/auto-indent (Phase 2),
+/// plus actual Dart execution via DartRunnerService — Run/Stop are
+/// live, with genuine Isolate-based cancellation and a real 10s
+/// timeout. Still placeholders: multi-file tabs (Phase 6), the real
+/// animated Console panel (Phase 4 — a plain temporary output list
+/// stands in for it now), and Save (Phase 5).
 class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key});
 
@@ -60,6 +64,7 @@ class _EditorScreenState extends State<EditorScreen> {
     // recreating the controller — recreating it would lose undo
     // history and cursor position.
     final settings = context.watch<SettingsProvider>();
+    final runner = context.watch<RunnerProvider>();
     _controller.scheme = editorSchemeFromName(settings.editorThemeName);
     _controller.indentSize = settings.indentSize;
 
@@ -70,10 +75,22 @@ class _EditorScreenState extends State<EditorScreen> {
     final editorArea = _EditorBody(
       controller: _controller,
       fontSize: settings.editorFontSize,
+      runner: runner,
     );
 
     return Scaffold(
-      appBar: _EditorAppBar(isDirty: _isDirty, useSidebar: useSidebar),
+      appBar: _EditorAppBar(
+        isDirty: _isDirty,
+        useSidebar: useSidebar,
+        isRunning: runner.isRunning,
+        onRunPressed: () {
+          if (runner.isRunning) {
+            runner.stop();
+          } else {
+            runner.run(_controller.text);
+          }
+        },
+      ),
       drawer: useSidebar ? null : const _FileDrawer(),
       body: SafeArea(
         child: useSidebar
@@ -96,8 +113,15 @@ class _EditorScreenState extends State<EditorScreen> {
 class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool isDirty;
   final bool useSidebar;
+  final bool isRunning;
+  final VoidCallback onRunPressed;
 
-  const _EditorAppBar({required this.isDirty, required this.useSidebar});
+  const _EditorAppBar({
+    required this.isDirty,
+    required this.useSidebar,
+    required this.isRunning,
+    required this.onRunPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -133,10 +157,10 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
           onPressed: null,
         ),
         IconButton(
-          tooltip: 'Run',
-          icon: const Icon(Icons.play_arrow_rounded),
-          // Real execution lands with DartRunner in Phase 3.
-          onPressed: null,
+          tooltip: isRunning ? 'Stop' : 'Run',
+          icon: Icon(isRunning ? Icons.stop_rounded : Icons.play_arrow_rounded),
+          color: isRunning ? Theme.of(context).colorScheme.error : null,
+          onPressed: onRunPressed,
         ),
         IconButton(
           tooltip: 'More',
@@ -154,8 +178,13 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
 class _EditorBody extends StatelessWidget {
   final CodeEditorController controller;
   final double fontSize;
+  final RunnerProvider runner;
 
-  const _EditorBody({required this.controller, required this.fontSize});
+  const _EditorBody({
+    required this.controller,
+    required this.fontSize,
+    required this.runner,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -184,8 +213,77 @@ class _EditorBody extends StatelessWidget {
           child: CodeEditor(controller: controller, fontSize: fontSize),
         ),
         CodingToolbar(controller: controller),
-        // Console panel mounts here in Phase 4.
+        if (runner.events.isNotEmpty || runner.isRunning) _TempOutputPanel(runner: runner),
       ],
+    );
+  }
+}
+
+/// A deliberately plain stand-in for the real Console panel (Phase 4:
+/// hidden-by-default animated bottom sheet, drag-resize, copy/clear/
+/// save). This exists only so Phase 3's execution is actually visible
+/// and testable — it reads the exact same [RunnerProvider.events] the
+/// real panel will.
+class _TempOutputPanel extends StatelessWidget {
+  final RunnerProvider runner;
+
+  const _TempOutputPanel({required this.runner});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 180),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        border: Border(top: BorderSide(color: Theme.of(context).dividerColor, width: 0.5)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.spaceMd,
+              vertical: AppConstants.spaceSm,
+            ),
+            child: Row(
+              children: [
+                Text('Output (temporary — Phase 4 replaces this)',
+                    style: Theme.of(context).textTheme.labelSmall),
+                const Spacer(),
+                if (runner.isRunning)
+                  const SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            ),
+          ),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: const EdgeInsets.symmetric(horizontal: AppConstants.spaceMd),
+              itemCount: runner.events.length,
+              itemBuilder: (context, i) {
+                final e = runner.events[i];
+                final isError = e.type == ConsoleEventType.stderr;
+                final label = e.type == ConsoleEventType.exitCode
+                    ? 'Program finished (exit code ${e.exitCode})'
+                    : (e.text ?? '');
+                return Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: editorFontFamily,
+                    fontSize: 12,
+                    color: isError ? scheme.error : scheme.onSurfaceVariant,
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

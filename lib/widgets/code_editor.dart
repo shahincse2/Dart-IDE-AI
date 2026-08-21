@@ -69,7 +69,7 @@ class _CodeEditorState extends State<CodeEditor> {
                 controller: widget.controller,
                 scrollController: _scrollController,
                 scheme: scheme,
-                lineHeight: _lineHeight,
+                lineHeight: _lineHeight + 2,
                 fontSize: widget.fontSize,
                 width: gutterWidth,
               ),
