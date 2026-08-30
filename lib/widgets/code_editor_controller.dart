@@ -5,11 +5,11 @@ import '../utils/dart_syntax_highlighter.dart';
 import '../utils/themes.dart';
 
 /// A [TextEditingController] that syntax-highlights Dart code, shows
-/// matching-bracket highlights, and auto-indents on Enter — all without
-/// an external editor package (see the Phase 2 architecture note: a
-/// custom controller gives full control over paired-character
-/// insertion and precise line-number sync that off-the-shelf editor
-/// widgets don't expose).
+/// matching-bracket highlights, auto-indents on Enter, and auto-closes
+/// paired characters as you type — all without an external editor
+/// package (see the Phase 2 architecture note: a custom controller
+/// gives full control over paired-character insertion and precise
+/// line-number sync that off-the-shelf editor widgets don't expose).
 class CodeEditorController extends TextEditingController {
   EditorColorScheme _scheme;
   int _indentSize;
@@ -26,7 +26,6 @@ class CodeEditorController extends TextEditingController {
         super(text: text);
 
   EditorColorScheme get scheme => _scheme;
-
   set scheme(EditorColorScheme value) {
     if (identical(_scheme, value)) return;
     _scheme = value;
@@ -47,7 +46,16 @@ class CodeEditorController extends TextEditingController {
 
   @override
   set value(TextEditingValue newValue) {
-    super.value = _applyAutoIndent(value, newValue);
+    final oldValue = value;
+    final afterIndent = _applyAutoIndent(oldValue, newValue);
+    // Auto-indent only ever changes something on a '\n' insert; for
+    // any other kind of edit it returns newValue untouched (same
+    // reference), so `identical` reliably tells us whether to also
+    // try auto-pairing. The two never both apply to the same edit.
+    final afterPair = identical(afterIndent, newValue)
+        ? _applyAutoPair(oldValue, newValue)
+        : afterIndent;
+    super.value = afterPair;
   }
 
   /// If this change was exactly one Enter keystroke (a single '\n'
@@ -95,6 +103,105 @@ class CodeEditorController extends TextEditingController {
     );
   }
 
+  static const Map<String, String> _autoPairOpenToClose = {
+    '(': ')',
+    '{': '}',
+    '[': ']',
+    '<': '>',
+    "'": "'",
+    '"': '"',
+  };
+
+  /// Characters where, if the very next character in the text already
+  /// matches what was just typed, we step the cursor over it instead
+  /// of inserting a duplicate — the standard "typing over a closer you
+  /// (or an auto-pair) already placed" behavior. Quotes are in both
+  /// this set and [_autoPairOpenToClose] since the same character
+  /// opens and closes a string.
+  static const Set<String> _autoPairSkipOverChars = {
+    ')',
+    '}',
+    ']',
+    '>',
+    "'",
+    '"'
+  };
+
+  /// Handles real keyboard-level paired-character insertion (Section
+  /// 15) — the coding toolbar already did this for its own taps, but
+  /// typing `(` directly on the keyboard wasn't auto-closing. Three
+  /// cases, checked in order:
+  ///   1. An opener typed while text is selected wraps the selection.
+  ///   2. A closer typed immediately before an identical character
+  ///      just moves the cursor past it, rather than duplicating it.
+  ///   3. Any other opener insert adds its matching closer right
+  ///      after, with the cursor left in between.
+  /// Anything else (typing a non-pair character, deleting, pasting,
+  /// programmatic edits from the toolbar) passes through untouched.
+  TextEditingValue _applyAutoPair(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    final oldText = oldValue.text;
+    final newText = newValue.text;
+    final oldSel = oldValue.selection;
+    final newSel = newValue.selection;
+
+    // Case 1: wrap an active selection.
+    if (oldSel.isValid && !oldSel.isCollapsed && newSel.isCollapsed) {
+      final removedLen = oldSel.end - oldSel.start;
+      final expectedLen = oldText.length - removedLen + 1;
+      if (newText.length == expectedLen &&
+          newSel.baseOffset == oldSel.start + 1) {
+        final typedChar = newText[oldSel.start];
+        final closeChar = _autoPairOpenToClose[typedChar];
+        if (closeChar != null) {
+          final selectedText = oldText.substring(oldSel.start, oldSel.end);
+          final before = oldText.substring(0, oldSel.start);
+          final after = oldText.substring(oldSel.end);
+          return TextEditingValue(
+            text: '$before$typedChar$selectedText$closeChar$after',
+            selection: TextSelection.collapsed(
+                offset: oldSel.start + 1 + selectedText.length),
+          );
+        }
+      }
+      return newValue;
+    }
+
+    // Cases 2 & 3 both require a plain single-character insertion at
+    // the old cursor position with no prior selection.
+    final isSingleCharTyped = newText.length == oldText.length + 1 &&
+        oldSel.isCollapsed &&
+        newSel.isCollapsed &&
+        newSel.baseOffset == oldSel.baseOffset + 1;
+    if (!isSingleCharTyped) return newValue;
+
+    final cursorBefore = oldSel.baseOffset;
+    final typedChar = newText[cursorBefore];
+
+    // Case 2: skip over an identical existing character.
+    if (_autoPairSkipOverChars.contains(typedChar) &&
+        cursorBefore < oldText.length &&
+        oldText[cursorBefore] == typedChar) {
+      return TextEditingValue(
+        text: oldText,
+        selection: TextSelection.collapsed(offset: cursorBefore + 1),
+      );
+    }
+
+    // Case 3: auto-insert the matching closer.
+    final closeChar = _autoPairOpenToClose[typedChar];
+    if (closeChar != null) {
+      final updated =
+          '${newText.substring(0, cursorBefore + 1)}$closeChar${newText.substring(cursorBefore + 1)}';
+      return TextEditingValue(
+        text: updated,
+        selection: TextSelection.collapsed(offset: cursorBefore + 1),
+      );
+    }
+
+    return newValue;
+  }
+
   @override
   TextSpan buildTextSpan({
     required BuildContext context,
@@ -139,7 +246,7 @@ class CodeEditorController extends TextEditingController {
         style: style?.copyWith(
           color: _colorFor(t.type),
           backgroundColor:
-              isBracketMatch ? _scheme.selection.withValues(alpha: 0.55) : null,
+              isBracketMatch ? _scheme.selection.withOpacity(0.55) : null,
           fontWeight: isBracketMatch ? FontWeight.w700 : null,
         ),
       ));

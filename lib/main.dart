@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'providers/console_provider.dart';
 import 'providers/runner_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/home_screen.dart';
@@ -28,10 +29,19 @@ class DartLabApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => RunnerProvider(),
         ),
-        // FileProvider, ProjectProvider, ConsoleProvider, and
-        // EditorProvider are added in their respective phases (5, 5,
-        // 4, 2) rather than stubbed here — an empty provider with
-        // nothing to manage is unused architecture (Rule 59).
+        // ConsoleProvider only manages visibility/sizing — it reads
+        // RunnerProvider's events rather than duplicating them, so it
+        // needs a reference to it. ChangeNotifierProxyProvider is the
+        // standard `provider` pattern for "this provider depends on
+        // that one".
+        ChangeNotifierProxyProvider<RunnerProvider, ConsoleProvider>(
+          create: (_) => ConsoleProvider(),
+          update: (_, runner, console) => (console ?? ConsoleProvider())..bind(runner),
+        ),
+        // FileProvider, ProjectProvider, and EditorProvider are added
+        // in their respective phases (5, 5, 2) rather than stubbed
+        // here — an empty provider with nothing to manage is unused
+        // architecture (Rule 59).
       ],
       child: Consumer<SettingsProvider>(
         builder: (context, settings, _) {

@@ -42,6 +42,7 @@ class AppConstants {
 
   // ---- Console ----
   static const double consoleMinHeight = 0;
+  static const double consoleMinOpenHeight = 120;
   static const double consoleDefaultHeight = 260;
   static const double consoleDragHandleHeight = 20;
 

@@ -43,6 +43,14 @@ class RunnerProvider extends ChangeNotifier {
 
   void stop() => _service.stop();
 
+  /// Clears the output history (Console's Clear action). Doesn't touch
+  /// a currently-running execution — events from that run will keep
+  /// arriving and simply start the list over.
+  void clearEvents() {
+    _events.clear();
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _subscription?.cancel();

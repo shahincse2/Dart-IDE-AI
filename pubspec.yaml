@@ -21,6 +21,7 @@ dependencies:
   # declared now so the foundation's SettingsProvider can persist theme/font choices.
   shared_preferences: ^2.2.3
   path_provider: ^2.1.5
+  path: ^1.9.0
 
   # Dart execution engine (Phase 3). Runs inside a dedicated Isolate —
   # see services/dart_runner_service.dart for why.
