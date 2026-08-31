@@ -7,9 +7,12 @@ import '../models/project_model.dart';
 import '../services/file_manager_service.dart';
 import '../utils/constants.dart';
 
-/// Project/file state for the whole app. EditorScreen and the file
-/// tree UI (Part 3) both read from this rather than touching
-/// [FileManagerService] directly.
+/// Project/file state for the whole app — now tracking multiple open
+/// tabs (Phase 6) instead of Phase 5's single open file. Deliberately
+/// still doesn't hold file *content*: EditorScreen owns one
+/// CodeEditorController per open tab and reads/writes content itself,
+/// this provider just tracks which paths are open, which is active,
+/// and per-tab dirty/autosave state.
 class FileProvider extends ChangeNotifier {
   final FileManagerService _service;
 
@@ -18,22 +21,24 @@ class FileProvider extends ChangeNotifier {
   List<ProjectModel> _projects = [];
   ProjectModel? _currentProject;
   ProjectFileNode? _fileTree;
-  String? _openFileRelativePath;
   bool _isLoadingProjects = false;
-  bool _isDirty = false;
 
-  Timer? _autoSaveTimer;
-  String? _pendingContent;
+  final List<String> _openTabs = [];
+  String? _activeTab;
+  final Map<String, bool> _dirtyTabs = {};
+  final Map<String, String> _pendingContent = {};
+  final Map<String, Timer> _autoSaveTimers = {};
 
   List<ProjectModel> get projects => List.unmodifiable(_projects);
   ProjectModel? get currentProject => _currentProject;
   ProjectFileNode? get fileTree => _fileTree;
-  String? get openFileRelativePath => _openFileRelativePath;
-  bool get isDirty => _isDirty;
   bool get isLoadingProjects => _isLoadingProjects;
-  bool get hasOpenFile => _currentProject != null && _openFileRelativePath != null;
 
-  String? get openFileName => _openFileRelativePath?.split('/').last;
+  List<String> get openTabs => List.unmodifiable(_openTabs);
+  String? get activeTab => _activeTab;
+  bool get hasActiveTab => _currentProject != null && _activeTab != null;
+  String? get activeFileName => _activeTab?.split('/').last;
+  bool isDirty(String relativePath) => _dirtyTabs[relativePath] ?? false;
 
   // ---- Projects ----
 
@@ -53,31 +58,26 @@ class FileProvider extends ChangeNotifier {
 
   Future<void> deleteProject(ProjectModel project) async {
     if (_currentProject?.id == project.id) {
-      _autoSaveTimer?.cancel();
-      _pendingContent = null;
+      await _closeAllTabs(flush: false); // project is being deleted — nothing to save
       _currentProject = null;
       _fileTree = null;
-      _openFileRelativePath = null;
-      _isDirty = false;
     }
     await _service.deleteProject(project);
     await loadProjects();
   }
 
-  /// Opens a project and, if it can find one, an initial file
-  /// (`main.dart` if present, otherwise the first file in the tree).
+  /// Switches projects, closing (and flushing) whatever tabs were open
+  /// from the previous one, then opens an initial file if it can find
+  /// one (`main.dart` if present, else the first file in the tree).
   Future<void> openProject(ProjectModel project) async {
-    await flushPendingSave();
+    await _closeAllTabs(flush: true);
     _currentProject = project;
-    _openFileRelativePath = null;
-    _isDirty = false;
     notifyListeners();
 
     await refreshFileTree();
     final defaultPath = _findDefaultFile(_fileTree);
     if (defaultPath != null) {
-      _openFileRelativePath = defaultPath;
-      notifyListeners();
+      openFile(defaultPath);
     }
   }
 
@@ -107,58 +107,104 @@ class FileProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String> readOpenFile() async {
+  Future<String> readFile(String relativePath) async {
     final project = _currentProject;
-    final path = _openFileRelativePath;
-    if (project == null || path == null) return '';
-    return _service.readFile(project, path);
+    if (project == null) return '';
+    return _service.readFile(project, relativePath);
   }
 
-  /// Switches the open file, flushing any pending autosave for the
-  /// previous one first so an edit can't be lost between the debounce
-  /// window and the switch.
-  Future<void> openFile(String relativePath) async {
-    await flushPendingSave();
-    _openFileRelativePath = relativePath;
-    _isDirty = false;
+  // ---- Tabs ----
+
+  /// Opens [relativePath] as a tab (adding it if not already open) and
+  /// makes it active. Doesn't touch content — EditorScreen reads it via
+  /// [readFile] the first time it sees a new open tab.
+  void openFile(String relativePath) {
+    if (!_openTabs.contains(relativePath)) {
+      _openTabs.add(relativePath);
+    }
+    _activeTab = relativePath;
     notifyListeners();
   }
 
-  // ---- Save / autosave ----
-
-  /// Called on every editor keystroke. Debounces so typing doesn't
-  /// hit disk on every character (Section 22: edits → debounce → save).
-  void scheduleAutoSave(String content) {
-    if (!hasOpenFile) return;
-    _isDirty = true;
-    _pendingContent = content;
+  void setActiveTab(String relativePath) {
+    if (!_openTabs.contains(relativePath) || _activeTab == relativePath) return;
+    _activeTab = relativePath;
     notifyListeners();
-
-    _autoSaveTimer?.cancel();
-    _autoSaveTimer = Timer(AppConstants.autoSaveDebounce, () {
-      unawaited(_saveNow(content));
-    });
   }
 
-  /// Saves immediately, bypassing the debounce (the app bar's Save
-  /// button, and app-lifecycle-pause per Section 22's "final save").
-  Future<void> saveNow(String content) => _saveNow(content);
+  /// Closes a tab. Confirming with the user when it's dirty is the
+  /// caller's job (Section 19) — by the time this runs, that decision
+  /// has already been made. [flush] controls whether pending content
+  /// gets written first (true = "save and close", false = "discard").
+  Future<void> closeTab(String relativePath, {required bool flush}) async {
+    _autoSaveTimers.remove(relativePath)?.cancel();
+    if (flush) {
+      final pending = _pendingContent.remove(relativePath);
+      if (pending != null && (_dirtyTabs[relativePath] ?? false)) {
+        await _writeNow(relativePath, pending);
+      }
+    } else {
+      _pendingContent.remove(relativePath);
+    }
+    _dirtyTabs.remove(relativePath);
 
-  Future<void> flushPendingSave() async {
-    _autoSaveTimer?.cancel();
-    final pending = _pendingContent;
-    if (pending != null && _isDirty) {
-      await _saveNow(pending);
+    final wasActive = _activeTab == relativePath;
+    _openTabs.remove(relativePath);
+    if (wasActive) {
+      _activeTab = _openTabs.isNotEmpty ? _openTabs.last : null;
+    }
+    notifyListeners();
+  }
+
+  Future<void> _closeAllTabs({required bool flush}) async {
+    for (final path in List<String>.from(_openTabs)) {
+      await closeTab(path, flush: flush);
     }
   }
 
-  Future<void> _saveNow(String content) async {
+  // ---- Save / autosave (per tab) ----
+
+  /// Called on every editor keystroke for whichever tab is being
+  /// edited. Debounces so typing doesn't hit disk on every character
+  /// (Section 22). Each open tab has its own independent timer, so
+  /// switching the active tab never interferes with another tab's
+  /// pending save.
+  void scheduleAutoSave(String relativePath, String content) {
+    if (_currentProject == null) return;
+    _dirtyTabs[relativePath] = true;
+    _pendingContent[relativePath] = content;
+    notifyListeners();
+
+    _autoSaveTimers[relativePath]?.cancel();
+    _autoSaveTimers[relativePath] = Timer(AppConstants.autoSaveDebounce, () {
+      unawaited(_writeNow(relativePath, content));
+    });
+  }
+
+  Future<void> saveNow(String relativePath, String content) => _writeNow(relativePath, content);
+
+  Future<void> flushPendingSave(String relativePath) async {
+    _autoSaveTimers.remove(relativePath)?.cancel();
+    final pending = _pendingContent[relativePath];
+    if (pending != null && (_dirtyTabs[relativePath] ?? false)) {
+      await _writeNow(relativePath, pending);
+    }
+  }
+
+  /// Flushes every open tab — used when leaving the editor entirely
+  /// (Section 22's "app lifecycle-এর সময় final save").
+  Future<void> flushAllPendingSaves() async {
+    for (final path in List<String>.from(_openTabs)) {
+      await flushPendingSave(path);
+    }
+  }
+
+  Future<void> _writeNow(String relativePath, String content) async {
     final project = _currentProject;
-    final path = _openFileRelativePath;
-    if (project == null || path == null) return;
-    await _service.writeFile(project, path, content);
-    _pendingContent = null;
-    _isDirty = false;
+    if (project == null) return;
+    await _service.writeFile(project, relativePath, content);
+    _pendingContent.remove(relativePath);
+    _dirtyTabs[relativePath] = false;
     notifyListeners();
   }
 
@@ -169,7 +215,7 @@ class FileProvider extends ChangeNotifier {
     if (project == null) return;
     final newPath = await _service.createFile(project, parentRelativePath, fileName);
     await refreshFileTree();
-    await openFile(newPath);
+    openFile(newPath);
   }
 
   Future<void> createFolder(String parentRelativePath, String folderName) async {
@@ -179,15 +225,42 @@ class FileProvider extends ChangeNotifier {
     await refreshFileTree();
   }
 
+  /// Renames a file or folder. If it (or, for a folder, anything open
+  /// underneath it) is currently open in a tab, that tab's path — and
+  /// its dirty/pending-save/timer state — moves with it, so an in-
+  /// progress edit isn't lost just because the file got renamed.
   Future<void> renameEntry(String relativePath, String newName, {required bool isFolder}) async {
     final project = _currentProject;
     if (project == null) return;
     final newPath =
         await _service.renameEntry(project, relativePath, newName, isFolder: isFolder);
-    if (_openFileRelativePath == relativePath) {
-      _openFileRelativePath = newPath;
+
+    if (!isFolder) {
+      _renameTabReference(relativePath, newPath);
+    } else {
+      final oldPrefix = '$relativePath/';
+      final newPrefix = '$newPath/';
+      for (final oldTabPath in List<String>.from(_openTabs)) {
+        if (oldTabPath.startsWith(oldPrefix)) {
+          _renameTabReference(oldTabPath, newPrefix + oldTabPath.substring(oldPrefix.length));
+        }
+      }
     }
     await refreshFileTree();
+  }
+
+  void _renameTabReference(String oldPath, String newPath) {
+    final index = _openTabs.indexOf(oldPath);
+    if (index == -1) return;
+    _openTabs[index] = newPath;
+    if (_activeTab == oldPath) _activeTab = newPath;
+    if (_dirtyTabs.containsKey(oldPath)) _dirtyTabs[newPath] = _dirtyTabs.remove(oldPath)!;
+    if (_pendingContent.containsKey(oldPath)) {
+      _pendingContent[newPath] = _pendingContent.remove(oldPath)!;
+    }
+    if (_autoSaveTimers.containsKey(oldPath)) {
+      _autoSaveTimers[newPath] = _autoSaveTimers.remove(oldPath)!;
+    }
   }
 
   Future<void> deleteEntry(String relativePath, {required bool isFolder}) async {
@@ -195,21 +268,20 @@ class FileProvider extends ChangeNotifier {
     if (project == null) return;
     await _service.deleteEntry(project, relativePath, isFolder: isFolder);
 
-    final openPath = _openFileRelativePath;
-    final closedOpenFile = openPath != null &&
-        (openPath == relativePath || (isFolder && openPath.startsWith('$relativePath/')));
-    if (closedOpenFile) {
-      _autoSaveTimer?.cancel();
-      _pendingContent = null;
-      _openFileRelativePath = null;
-      _isDirty = false;
+    final affected = List<String>.from(_openTabs).where(
+      (tabPath) => tabPath == relativePath || (isFolder && tabPath.startsWith('$relativePath/')),
+    );
+    for (final tabPath in affected) {
+      await closeTab(tabPath, flush: false); // the file is gone — nothing left to save
     }
     await refreshFileTree();
   }
 
   @override
   void dispose() {
-    _autoSaveTimer?.cancel();
+    for (final timer in _autoSaveTimers.values) {
+      timer.cancel();
+    }
     super.dispose();
   }
 }

@@ -129,12 +129,16 @@ class _FileTreeEntryState extends State<_FileTreeEntry> {
     final fileProvider = context.watch<FileProvider>();
 
     if (node.isFile) {
-      final isOpen = fileProvider.openFileRelativePath == node.relativePath;
+      final isOpen = fileProvider.openTabs.contains(node.relativePath);
+      final isActive = fileProvider.activeTab == node.relativePath;
       return _EntryRow(
         icon: Icons.description_outlined,
         label: node.name,
         depth: widget.depth,
-        selected: isOpen,
+        selected: isActive,
+        // Files that are open in a background tab (but not the active
+        // one) get a lighter indicator than the fully-selected style.
+        openIndicator: isOpen && !isActive,
         onTap: () => fileProvider.openFile(node.relativePath),
         onLongPress: () => _showEntryActions(context, node, isFolder: false),
       );
@@ -172,6 +176,7 @@ class _EntryRow extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+  final bool openIndicator;
 
   const _EntryRow({
     required this.icon,
@@ -179,6 +184,7 @@ class _EntryRow extends StatelessWidget {
     required this.label,
     required this.depth,
     this.selected = false,
+    this.openIndicator = false,
     required this.onTap,
     this.onLongPress,
   });
@@ -213,6 +219,13 @@ class _EntryRow extends StatelessWidget {
                   ),
                 ),
               ),
+              if (openIndicator)
+                Container(
+                  width: 5,
+                  height: 5,
+                  margin: const EdgeInsets.only(right: 4),
+                  decoration: BoxDecoration(color: scheme.onSurfaceVariant, shape: BoxShape.circle),
+                ),
               if (trailingIcon != null) Icon(trailingIcon, size: 16, color: scheme.onSurfaceVariant),
             ],
           ),

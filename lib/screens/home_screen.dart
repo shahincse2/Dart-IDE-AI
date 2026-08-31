@@ -1,76 +1,168 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../models/project_model.dart';
+import '../providers/file_provider.dart';
 import '../utils/constants.dart';
 import 'editor_screen.dart';
 
-/// Landing screen — will list saved projects once ProjectProvider and
-/// local storage exist (Phase 5). Until then this is an honest empty
-/// state rather than a mocked project list, per the "never fake
-/// functionality" rule: there is genuinely nothing to show yet.
-class HomeScreen extends StatelessWidget {
+/// Landing screen — lists real projects from [FileProvider] now that
+/// Phase 5's file system exists (Phase 1's version showed an honest
+/// empty state because there was nothing to list yet).
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Deferred to after the first frame since it touches a provider
+    // during screen construction; loadProjects() itself is async
+    // filesystem work regardless.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<FileProvider>().loadProjects();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final isTablet = AppConstants.isTablet(context);
+    final fileProvider = context.watch<FileProvider>();
+    final hasProjects = fileProvider.projects.isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(AppConstants.appName),
-      ),
+      appBar: AppBar(title: const Text(AppConstants.appName)),
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: isTablet ? 480 : 360),
-            child: Padding(
-              padding: const EdgeInsets.all(AppConstants.spaceLg),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.code_rounded,
-                    size: 56,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(height: AppConstants.spaceMd),
-                  Text(
-                    'Start your first project',
-                    style: Theme.of(context).textTheme.titleMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: AppConstants.spaceSm),
-                  Text(
-                    'Write and run Dart code right on your phone — '
-                    'no computer needed.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        child: fileProvider.isLoadingProjects
+            ? const Center(child: CircularProgressIndicator())
+            : hasProjects
+                ? ListView.separated(
+                    padding: const EdgeInsets.all(AppConstants.spaceMd),
+                    itemCount: fileProvider.projects.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: AppConstants.spaceSm),
+                    itemBuilder: (context, i) {
+                      final project = fileProvider.projects[i];
+                      return Card(
+                        margin: EdgeInsets.zero,
+                        child: ListTile(
+                          leading: const Icon(Icons.folder_outlined),
+                          title: Text(project.name),
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                          onTap: () => _openProject(context, project),
                         ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: AppConstants.spaceLg),
-                  SizedBox(
-                    height: AppConstants.minTouchTarget,
-                    child: FilledButton.icon(
-                      onPressed: () => _openScratchFile(context),
-                      icon: const Icon(Icons.add_rounded),
-                      label: const Text('New project'),
-                    ),
-                  ),
-                ],
+                      );
+                    },
+                  )
+                : _EmptyProjectsView(onCreate: () => _createProject(context)),
+      ),
+      floatingActionButton: hasProjects
+          ? FloatingActionButton.extended(
+              onPressed: () => _createProject(context),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('New project'),
+            )
+          : null,
+    );
+  }
+
+  Future<void> _createProject(BuildContext context) async {
+    final name = await _promptProjectName(context);
+    if (name == null || name.isEmpty || !context.mounted) return;
+    final fileProvider = context.read<FileProvider>();
+    final project = await fileProvider.createProject(name);
+    if (!context.mounted) return;
+    await _openProject(context, project);
+  }
+
+  Future<void> _openProject(BuildContext context, ProjectModel project) async {
+    final fileProvider = context.read<FileProvider>();
+    await fileProvider.openProject(project);
+    if (!context.mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const EditorScreen()),
+    );
+    // Coming back from the editor doesn't need a project-list refresh —
+    // creating/renaming/deleting *projects* only happens from this
+    // screen, so the list can't have gone stale while the editor was open.
+  }
+}
+
+class _EmptyProjectsView extends StatelessWidget {
+  final VoidCallback onCreate;
+
+  const _EmptyProjectsView({required this.onCreate});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Padding(
+          padding: const EdgeInsets.all(AppConstants.spaceLg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.code_rounded,
+                size: 56,
+                color: Theme.of(context).colorScheme.primary,
               ),
-            ),
+              const SizedBox(height: AppConstants.spaceMd),
+              Text(
+                'Start your first project',
+                style: Theme.of(context).textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppConstants.spaceSm),
+              Text(
+                'Write and run Dart code right on your phone — '
+                'no computer needed.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppConstants.spaceLg),
+              SizedBox(
+                height: AppConstants.minTouchTarget,
+                child: FilledButton.icon(
+                  onPressed: onCreate,
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('New project'),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+}
 
-  /// Phase 1 stand-in: opens the editor with an unsaved scratch file.
-  /// Real project creation (naming, on-disk folder, file tree) arrives
-  /// with FileProvider/ProjectProvider in Phase 5.
-  void _openScratchFile(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const EditorScreen()),
-    );
-  }
+Future<String?> _promptProjectName(BuildContext context) {
+  final controller = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('New project'),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        decoration: const InputDecoration(hintText: 'Project name'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+          child: const Text('Create'),
+        ),
+      ],
+    ),
+  );
 }

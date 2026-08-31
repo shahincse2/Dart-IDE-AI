@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../providers/file_provider.dart';
 import '../providers/runner_provider.dart';
 import '../providers/settings_provider.dart';
 import '../utils/constants.dart';
@@ -9,18 +10,19 @@ import '../widgets/code_editor.dart';
 import '../widgets/code_editor_controller.dart';
 import '../widgets/coding_toolbar.dart';
 import '../widgets/console_panel.dart';
+import '../widgets/file_tab_bar.dart';
+import '../widgets/file_tree.dart';
 
 /// The main workspace. This screen owns the responsive shell described
 /// in Section 44:
 ///   - Portrait: drawer for file navigation, editor fills the rest.
 ///   - Landscape / tablet: persistent sidebar beside the editor.
 ///
-/// What's real as of Phase 4: syntax-highlighted editing (Phase 2),
-/// live Dart execution with genuine Isolate-based Stop/timeout (Phase
-/// 3), and now the real Console panel — hidden by default, opens
-/// automatically on Run or on an error, drag-resizable, with copy/
-/// save/clear. Still placeholders: multi-file tabs (Phase 6), Save
-/// (Phase 5), interactive stdin and argument entry (Phase 8).
+/// What's real as of Phase 6: real multi-file tabs. Each open tab gets
+/// its own [CodeEditorController] (kept alive in [_controllers] for as
+/// long as the tab stays open), so switching tabs doesn't lose cursor
+/// position or undo history the way Phase 5's single-controller swap
+/// did. Still placeholders: interactive stdin / argument entry (Phase 8).
 class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key});
 
@@ -29,75 +31,125 @@ class EditorScreen extends StatefulWidget {
 }
 
 class _EditorScreenState extends State<EditorScreen> {
-  late final CodeEditorController _controller;
-  bool _isDirty = false;
+  late final FileProvider _fileProvider;
+  final Map<String, CodeEditorController> _controllers = {};
+  final Set<String> _loadingPaths = {};
 
   @override
   void initState() {
     super.initState();
-    final settings = context.read<SettingsProvider>();
-    _controller = CodeEditorController(
-      scheme: editorSchemeFromName(settings.editorThemeName),
-      indentSize: settings.indentSize,
-      text: "void main() {\n  print('Hello, Dart!');\n}\n",
-    );
-    _controller.addListener(_onEdited);
+    _fileProvider = context.read<FileProvider>();
+    _fileProvider.addListener(_onFileProviderChanged);
+    _syncControllers();
   }
 
-  void _onEdited() {
-    if (!_isDirty) setState(() => _isDirty = true);
+  void _onFileProviderChanged() => _syncControllers();
+
+  /// Keeps [_controllers] matched to [FileProvider.openTabs]: disposes
+  /// controllers for tabs that closed, and creates + loads one for any
+  /// newly opened tab.
+  Future<void> _syncControllers() async {
+    final openTabs = _fileProvider.openTabs;
+
+    final toRemove = _controllers.keys.where((path) => !openTabs.contains(path)).toList();
+    for (final path in toRemove) {
+      _controllers.remove(path)?.dispose();
+    }
+
+    for (final path in openTabs) {
+      if (_controllers.containsKey(path) || _loadingPaths.contains(path)) continue;
+      _loadingPaths.add(path);
+
+      final settings = context.read<SettingsProvider>();
+      final controller = CodeEditorController(
+        scheme: editorSchemeFromName(settings.editorThemeName),
+        indentSize: settings.indentSize,
+      );
+
+      final content = await _fileProvider.readFile(path);
+
+      if (!mounted || !_fileProvider.openTabs.contains(path)) {
+        // The tab was closed again while this read was in flight —
+        // discard rather than attach a controller for a closed tab.
+        _loadingPaths.remove(path);
+        controller.dispose();
+        continue;
+      }
+
+      controller.value = TextEditingValue(
+        text: content,
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+      controller.addListener(() => _fileProvider.scheduleAutoSave(path, controller.text));
+
+      _controllers[path] = controller;
+      _loadingPaths.remove(path);
+      if (mounted) setState(() {});
+    }
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_onEdited);
-    _controller.dispose();
+    _fileProvider.removeListener(_onFileProviderChanged);
+    _fileProvider.flushAllPendingSaves();
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Keep the controller's rendering options in sync with live
-    // settings changes (e.g. flipping the editor theme or indent size
-    // in Settings, once that screen exists in Phase 10) without
-    // recreating the controller — recreating it would lose undo
-    // history and cursor position.
     final settings = context.watch<SettingsProvider>();
     final runner = context.watch<RunnerProvider>();
-    _controller.scheme = editorSchemeFromName(settings.editorThemeName);
-    _controller.indentSize = settings.indentSize;
+    final fileProvider = context.watch<FileProvider>();
+
+    // Every open controller stays in sync with live settings, not just
+    // the active one — otherwise switching to a background tab would
+    // briefly show stale theme/indent settings.
+    for (final controller in _controllers.values) {
+      controller.scheme = editorSchemeFromName(settings.editorThemeName);
+      controller.indentSize = settings.indentSize;
+    }
+
+    final activePath = fileProvider.activeTab;
+    final activeController = activePath != null ? _controllers[activePath] : null;
 
     final isTablet = AppConstants.isTablet(context);
     final isLandscape = AppConstants.isLandscape(context);
     final useSidebar = isTablet || isLandscape;
 
     final editorArea = _EditorBody(
-      controller: _controller,
+      activePath: activePath,
+      controller: activeController,
       fontSize: settings.editorFontSize,
     );
 
     return Scaffold(
       appBar: _EditorAppBar(
-        isDirty: _isDirty,
+        fileName: fileProvider.activeFileName ?? 'No file open',
+        isDirty: activePath != null && fileProvider.isDirty(activePath),
         useSidebar: useSidebar,
         isRunning: runner.isRunning,
-        onRunPressed: () {
-          if (runner.isRunning) {
-            runner.stop();
-          } else {
-            runner.run(_controller.text);
-          }
-        },
+        onRunPressed: activeController == null
+            ? null
+            : () {
+                if (runner.isRunning) {
+                  runner.stop();
+                } else {
+                  runner.run(activeController.text);
+                }
+              },
+        onSavePressed: activeController != null
+            ? () => fileProvider.saveNow(activePath!, activeController.text)
+            : null,
       ),
-      drawer: useSidebar ? null : const _FileDrawer(),
+      drawer: useSidebar ? null : const Drawer(child: FileTreeView()),
       body: SafeArea(
         child: useSidebar
             ? Row(
                 children: [
-                  const SizedBox(
-                    width: 240,
-                    child: _FileDrawer(embedded: true),
-                  ),
+                  const SizedBox(width: 240, child: FileTreeView()),
                   const VerticalDivider(width: 0.5),
                   Expanded(child: editorArea),
                 ],
@@ -109,16 +161,20 @@ class _EditorScreenState extends State<EditorScreen> {
 }
 
 class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
+  final String fileName;
   final bool isDirty;
   final bool useSidebar;
   final bool isRunning;
-  final VoidCallback onRunPressed;
+  final VoidCallback? onRunPressed;
+  final VoidCallback? onSavePressed;
 
   const _EditorAppBar({
+    required this.fileName,
     required this.isDirty,
     required this.useSidebar,
     required this.isRunning,
     required this.onRunPressed,
+    required this.onSavePressed,
   });
 
   @override
@@ -128,11 +184,8 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Flexible(
-            child: Text(
-              'main.dart',
-              overflow: TextOverflow.ellipsis,
-            ),
+          Flexible(
+            child: Text(fileName, overflow: TextOverflow.ellipsis),
           ),
           if (isDirty) ...[
             const SizedBox(width: AppConstants.spaceSm),
@@ -151,8 +204,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
         IconButton(
           tooltip: 'Save',
           icon: const Icon(Icons.save_outlined),
-          // Real save lands with FileProvider in Phase 5.
-          onPressed: null,
+          onPressed: onSavePressed,
         ),
         IconButton(
           tooltip: isRunning ? 'Stop' : 'Run',
@@ -174,10 +226,12 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
 }
 
 class _EditorBody extends StatelessWidget {
-  final CodeEditorController controller;
+  final String? activePath;
+  final CodeEditorController? controller;
   final double fontSize;
 
   const _EditorBody({
+    required this.activePath,
     required this.controller,
     required this.fontSize,
   });
@@ -186,72 +240,42 @@ class _EditorBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Tab bar placeholder — becomes a real scrollable multi-file
-        // tab strip in Phase 6.
-        Container(
-          height: AppConstants.tabBarHeight,
-          alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: AppConstants.spaceMd),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor,
-                width: 0.5,
-              ),
-            ),
-          ),
-          child: Text(
-            'main.dart',
-            style: Theme.of(context).textTheme.labelMedium,
-          ),
-        ),
+        const FileTabBar(),
         Expanded(
-          child: CodeEditor(controller: controller, fontSize: fontSize),
+          child: controller != null
+              // Keyed by path so switching tabs gives each file its own
+              // fresh scroll position rather than inheriting whatever
+              // the previous tab's viewport happened to be at — cursor
+              // position and undo history still carry over correctly
+              // since those live on the controller, not this widget.
+              ? CodeEditor(
+                  key: ValueKey(activePath),
+                  controller: controller!,
+                  fontSize: fontSize,
+                )
+              : const _NoFileOpenPlaceholder(),
         ),
-        CodingToolbar(controller: controller),
+        if (controller != null) CodingToolbar(controller: controller!),
         const ConsolePanel(),
       ],
     );
   }
 }
 
-class _FileDrawer extends StatelessWidget {
-  final bool embedded;
-
-  const _FileDrawer({this.embedded = false});
+class _NoFileOpenPlaceholder extends StatelessWidget {
+  const _NoFileOpenPlaceholder();
 
   @override
   Widget build(BuildContext context) {
-    final content = SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(AppConstants.spaceMd),
-            child: Text(
-              AppConstants.appName,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-          const Divider(height: 0.5),
-          Expanded(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(AppConstants.spaceMd),
-                child: Text(
-                  'File tree arrives in Phase 5.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
-          ),
-        ],
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.spaceLg),
+        child: Text(
+          'No file open.\nCreate or pick one from the file tree.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
       ),
     );
-
-    return embedded ? content : Drawer(child: content);
   }
 }
