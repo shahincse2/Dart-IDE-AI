@@ -83,7 +83,7 @@ class _TabChip extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppConstants.spaceSm),
+          padding: const EdgeInsets.only(left: AppConstants.spaceMd),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -103,13 +103,19 @@ class _TabChip extends StatelessWidget {
                   decoration: BoxDecoration(color: scheme.primary, shape: BoxShape.circle),
                 ),
               ],
-              const SizedBox(width: AppConstants.spaceXs),
-              InkWell(
+              // A dedicated, opaque 32x32 hit region for close — the
+              // previous version was a 14px icon with 4px of padding
+              // (~22x22 total), nested inside this tab's own much
+              // larger tap area. Taps aimed at "close" were landing on
+              // "select this tab" instead just from being imprecise,
+              // which looked like the close button did nothing.
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: onClose,
-                borderRadius: BorderRadius.circular(12),
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Icon(Icons.close_rounded, size: 14, color: scheme.onSurfaceVariant),
+                child: SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: Icon(Icons.close_rounded, size: 16, color: scheme.onSurfaceVariant),
                 ),
               ),
             ],

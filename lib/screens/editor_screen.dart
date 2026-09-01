@@ -12,17 +12,21 @@ import '../widgets/coding_toolbar.dart';
 import '../widgets/console_panel.dart';
 import '../widgets/file_tab_bar.dart';
 import '../widgets/file_tree.dart';
+import '../widgets/find_replace_bar.dart';
 
 /// The main workspace. This screen owns the responsive shell described
 /// in Section 44:
 ///   - Portrait: drawer for file navigation, editor fills the rest.
 ///   - Landscape / tablet: persistent sidebar beside the editor.
 ///
-/// What's real as of Phase 6: real multi-file tabs. Each open tab gets
-/// its own [CodeEditorController] (kept alive in [_controllers] for as
-/// long as the tab stays open), so switching tabs doesn't lose cursor
-/// position or undo history the way Phase 5's single-controller swap
-/// did. Still placeholders: interactive stdin / argument entry (Phase 8).
+/// What's real as of Phase 7 (Part 1): Find & Replace, shown as a bar
+/// above the editor with match count, next/prev navigation, and
+/// replace/replace-all — plus everything from Phases 2-6 (real
+/// multi-file tabs, each with its own [CodeEditorController] so
+/// switching tabs preserves cursor position and undo history). Still
+/// to come this phase: go to line, undo/redo, word wrap, font size.
+/// Still placeholders after that: interactive stdin / argument entry
+/// (Phase 8).
 class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key});
 
@@ -34,6 +38,7 @@ class _EditorScreenState extends State<EditorScreen> {
   late final FileProvider _fileProvider;
   final Map<String, CodeEditorController> _controllers = {};
   final Set<String> _loadingPaths = {};
+  bool _showFindReplace = false;
 
   @override
   void initState() {
@@ -120,9 +125,10 @@ class _EditorScreenState extends State<EditorScreen> {
     final useSidebar = isTablet || isLandscape;
 
     final editorArea = _EditorBody(
-      activePath: activePath,
       controller: activeController,
       fontSize: settings.editorFontSize,
+      showFindReplace: _showFindReplace && activeController != null,
+      onCloseFindReplace: () => setState(() => _showFindReplace = false),
     );
 
     return Scaffold(
@@ -142,6 +148,9 @@ class _EditorScreenState extends State<EditorScreen> {
               },
         onSavePressed: activeController != null
             ? () => fileProvider.saveNow(activePath!, activeController.text)
+            : null,
+        onFindPressed: activeController != null
+            ? () => setState(() => _showFindReplace = !_showFindReplace)
             : null,
       ),
       drawer: useSidebar ? null : const Drawer(child: FileTreeView()),
@@ -167,6 +176,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool isRunning;
   final VoidCallback? onRunPressed;
   final VoidCallback? onSavePressed;
+  final VoidCallback? onFindPressed;
 
   const _EditorAppBar({
     required this.fileName,
@@ -175,6 +185,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.isRunning,
     required this.onRunPressed,
     required this.onSavePressed,
+    required this.onFindPressed,
   });
 
   @override
@@ -202,6 +213,11 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
       ),
       actions: [
         IconButton(
+          tooltip: 'Find & Replace',
+          icon: const Icon(Icons.search_rounded),
+          onPressed: onFindPressed,
+        ),
+        IconButton(
           tooltip: 'Save',
           icon: const Icon(Icons.save_outlined),
           onPressed: onSavePressed,
@@ -226,14 +242,16 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
 }
 
 class _EditorBody extends StatelessWidget {
-  final String? activePath;
   final CodeEditorController? controller;
   final double fontSize;
+  final bool showFindReplace;
+  final VoidCallback onCloseFindReplace;
 
   const _EditorBody({
-    required this.activePath,
     required this.controller,
     required this.fontSize,
+    required this.showFindReplace,
+    required this.onCloseFindReplace,
   });
 
   @override
@@ -241,18 +259,23 @@ class _EditorBody extends StatelessWidget {
     return Column(
       children: [
         const FileTabBar(),
+        if (showFindReplace && controller != null)
+          FindReplaceBar(
+            // Keyed to the controller so switching files while Find is
+            // open starts a fresh search session instead of showing
+            // match highlights computed against a different file.
+            key: ValueKey(controller),
+            controller: controller!,
+            onClose: onCloseFindReplace,
+          ),
         Expanded(
+          // Deliberately NOT keyed by the active file's path. Re-keying
+          // forced a full remount on every tab switch, which reset the
+          // visible cursor position to the start of the file — see
+          // CodeEditor's doc comment. CodeEditor's own didUpdateWidget
+          // handles the controller swap correctly on its own.
           child: controller != null
-              // Keyed by path so switching tabs gives each file its own
-              // fresh scroll position rather than inheriting whatever
-              // the previous tab's viewport happened to be at — cursor
-              // position and undo history still carry over correctly
-              // since those live on the controller, not this widget.
-              ? CodeEditor(
-                  key: ValueKey(activePath),
-                  controller: controller!,
-                  fontSize: fontSize,
-                )
+              ? CodeEditor(controller: controller!, fontSize: fontSize)
               : const _NoFileOpenPlaceholder(),
         ),
         if (controller != null) CodingToolbar(controller: controller!),
