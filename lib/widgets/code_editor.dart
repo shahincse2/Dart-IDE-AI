@@ -41,11 +41,15 @@ import 'code_editor_controller.dart';
 class CodeEditor extends StatefulWidget {
   final CodeEditorController controller;
   final double fontSize;
+  final UndoHistoryController? undoController;
+  final bool wordWrap;
 
   const CodeEditor({
     super.key,
     required this.controller,
     this.fontSize = AppConstants.defaultFontSize,
+    this.undoController,
+    this.wordWrap = true,
   });
 
   @override
@@ -61,16 +65,16 @@ class _CodeEditorState extends State<CodeEditor> {
   @override
   void initState() {
     super.initState();
-    widget.controller.addListener(_onEditorChanged);
-    _scrollController.addListener(_onEditorChanged);
+    widget.controller.addListener(_onControllerChanged);
+    _scrollController.addListener(_onScrollChanged);
   }
 
   @override
   void didUpdateWidget(covariant CodeEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_onEditorChanged);
-      widget.controller.addListener(_onEditorChanged);
+      oldWidget.controller.removeListener(_onControllerChanged);
+      widget.controller.addListener(_onControllerChanged);
       // Switching to a different file's controller: start scrolled to
       // the top rather than wherever the previous file's viewport
       // happened to be. The cursor/selection needs no special handling
@@ -82,13 +86,25 @@ class _CodeEditorState extends State<CodeEditor> {
     }
   }
 
-  void _onEditorChanged() {
+  /// Text or selection changed — redraw, and auto-scroll the cursor
+  /// into view (Find & Replace navigation, Go to Line, typing past the
+  /// bottom edge).
+  void _onControllerChanged() {
     setState(() {});
     // Runs after the frame renders, once _scrollController actually
-    // has a viewport to measure. Needed for Find & Replace navigation
-    // and Go to Line (Phase 7) — setting `controller.selection`
-    // programmatically doesn't auto-scroll the way typing does.
+    // has a viewport to measure.
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureCursorVisible());
+  }
+
+  /// The user scrolled (or `_ensureCursorVisible` did) — just redraw
+  /// the gutter/current-line-highlight to track the new offset.
+  /// Deliberately does NOT call `_ensureCursorVisible`: that was the
+  /// bug — with both events wired to the same handler, every manual
+  /// scroll away from the cursor's line immediately triggered an
+  /// auto-scroll back to it, so scrolling through anything longer than
+  /// one screen felt broken (it kept snapping back).
+  void _onScrollChanged() {
+    setState(() {});
   }
 
   void _ensureCursorVisible() {
@@ -119,8 +135,8 @@ class _CodeEditorState extends State<CodeEditor> {
 
   @override
   void dispose() {
-    widget.controller.removeListener(_onEditorChanged);
-    _scrollController.removeListener(_onEditorChanged);
+    widget.controller.removeListener(_onControllerChanged);
+    _scrollController.removeListener(_onScrollChanged);
     _scrollController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -141,12 +157,26 @@ class _CodeEditorState extends State<CodeEditor> {
     return (digits * widget.fontSize * 0.62) + AppConstants.spaceMd + AppConstants.spaceXs;
   }
 
+  /// Rough monospace-character-width estimate for the longest line —
+  /// used only to size the horizontal scroll area when word wrap is
+  /// off. Doesn't need to be pixel-exact, just wide enough that the
+  /// longest line isn't clipped.
+  double _longestLineWidth(String text) {
+    var maxChars = 0;
+    for (final line in text.split('\n')) {
+      if (line.length > maxChars) maxChars = line.length;
+    }
+    return maxChars * widget.fontSize * 0.62;
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = widget.controller.scheme;
     final lineCount = _lineCountOf(widget.controller.text);
     final currentLine = _currentLineIndex();
     final scrollOffset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+    final viewportHeight =
+        _scrollController.hasClients ? _scrollController.position.viewportDimension : null;
     final gutterWidth = _gutterWidthFor(lineCount);
 
     return ColoredBox(
@@ -162,53 +192,81 @@ class _CodeEditorState extends State<CodeEditor> {
             lineCount: lineCount,
             currentLine: currentLine,
             scrollOffset: scrollOffset,
+            viewportHeight: viewportHeight,
           ),
           Container(width: 0.5, color: scheme.gutterText.withOpacity(0.15)),
           Expanded(
-            child: Stack(
-              children: [
-                _CurrentLineHighlight(
-                  scheme: scheme,
-                  lineHeight: _lineHeight,
-                  currentLine: currentLine,
-                  scrollOffset: scrollOffset,
-                  hasSelection:
-                      widget.controller.selection.isValid && widget.controller.selection.isCollapsed,
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(left: AppConstants.spaceSm),
-                  child: TextField(
-                    controller: widget.controller,
-                    scrollController: _scrollController,
-                    focusNode: _focusNode,
-                    maxLines: null,
-                    expands: true,
-                    cursorColor: scheme.cursor,
-                    cursorWidth: 2,
-                    textAlignVertical: TextAlignVertical.top,
-                    keyboardType: TextInputType.multiline,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    style: TextStyle(
-                      fontFamily: editorFontFamily,
-                      fontSize: widget.fontSize,
-                      height: AppConstants.editorLineHeight,
-                      color: scheme.text,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final editorStack = Stack(
+                  children: [
+                    _CurrentLineHighlight(
+                      scheme: scheme,
+                      lineHeight: _lineHeight,
+                      currentLine: currentLine,
+                      scrollOffset: scrollOffset,
+                      hasSelection: widget.controller.selection.isValid &&
+                          widget.controller.selection.isCollapsed,
                     ),
-                    strutStyle: StrutStyle(
-                      fontFamily: editorFontFamily,
-                      fontSize: widget.fontSize,
-                      height: AppConstants.editorLineHeight,
-                      forceStrutHeight: true,
+                    Padding(
+                      padding: const EdgeInsets.only(left: AppConstants.spaceSm),
+                      child: TextField(
+                        controller: widget.controller,
+                        scrollController: _scrollController,
+                        focusNode: _focusNode,
+                        undoController: widget.undoController,
+                        maxLines: null,
+                        expands: true,
+                        cursorColor: scheme.cursor,
+                        cursorWidth: 2,
+                        textAlignVertical: TextAlignVertical.top,
+                        keyboardType: TextInputType.multiline,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        style: TextStyle(
+                          fontFamily: editorFontFamily,
+                          fontSize: widget.fontSize,
+                          height: AppConstants.editorLineHeight,
+                          color: scheme.text,
+                        ),
+                        strutStyle: StrutStyle(
+                          fontFamily: editorFontFamily,
+                          fontSize: widget.fontSize,
+                          height: AppConstants.editorLineHeight,
+                          forceStrutHeight: true,
+                        ),
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          isCollapsed: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
                     ),
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      isCollapsed: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                  ],
+                );
+
+                if (widget.wordWrap) return editorStack;
+
+                // Word wrap off: give the editor a fixed width wide
+                // enough for its longest line, inside a horizontal
+                // scroll view, instead of letting TextField wrap long
+                // lines the way it does by default. The gutter stays
+                // outside this scroll view (see the Row above), so line
+                // numbers remain visible while code scrolls under them.
+                final contentWidth = [
+                  _longestLineWidth(widget.controller.text) + AppConstants.spaceLg,
+                  constraints.maxWidth,
+                ].reduce((a, b) => a > b ? a : b);
+
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: contentWidth,
+                    height: constraints.maxHeight,
+                    child: editorStack,
                   ),
-                ),
-              ],
+                );
+              },
             ),
           ),
         ],
@@ -225,6 +283,7 @@ class _LineNumberGutter extends StatelessWidget {
   final int lineCount;
   final int currentLine;
   final double scrollOffset;
+  final double? viewportHeight;
 
   const _LineNumberGutter({
     required this.scheme,
@@ -234,46 +293,62 @@ class _LineNumberGutter extends StatelessWidget {
     required this.lineCount,
     required this.currentLine,
     required this.scrollOffset,
+    required this.viewportHeight,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Each line number is absolutely positioned inside a Stack rather
-    // than stacked in a Column. A Column asserts (and overflows)
-    // whenever its children's combined height exceeds what its parent
-    // hands it — which happens for any file with more lines than fit
-    // on screen. A Stack has no such assertion: children beyond its
-    // bounds are simply clipped (Stack's default clipBehavior is
-    // Clip.hardEdge), so this works regardless of file length.
+    // Only the lines actually near the visible viewport get built —
+    // for a long file, generating a Positioned+Text for every single
+    // line on every scroll frame (most of them off-screen) was the
+    // real cause of scrolling feeling janky rather than smooth. A
+    // Stack still can't overflow-assert (Section: gutter overflow fix)
+    // since we're just choosing not to add most children, not asking
+    // it to lay out fewer than it's given.
+    int firstVisible;
+    int lastVisible;
+    if (viewportHeight == null) {
+      // No layout measurement yet (first frame) — render everything
+      // once; this only affects the very first build.
+      firstVisible = 0;
+      lastVisible = lineCount - 1;
+    } else {
+      const buffer = 4; // extra lines above/below so fast flings don't show a blank edge
+      firstVisible = (scrollOffset / lineHeight).floor() - buffer;
+      lastVisible = ((scrollOffset + viewportHeight!) / lineHeight).ceil() + buffer;
+      firstVisible = firstVisible.clamp(0, lineCount - 1);
+      lastVisible = lastVisible.clamp(0, lineCount - 1);
+    }
+
     return SizedBox(
       width: width,
       child: ColoredBox(
         color: scheme.gutterBackground,
         child: Stack(
-          children: List.generate(lineCount, (i) {
-            final isCurrent = i == currentLine;
-            return Positioned(
-              top: (i * lineHeight) - scrollOffset,
-              left: 0,
-              right: 0,
-              height: lineHeight,
-              child: Padding(
-                padding: const EdgeInsets.only(right: AppConstants.spaceSm),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    '${i + 1}',
-                    style: TextStyle(
-                      fontFamily: editorFontFamily,
-                      fontSize: fontSize * 0.85,
-                      color: isCurrent ? scheme.text : scheme.gutterText,
-                      fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
+          children: [
+            for (var i = firstVisible; i <= lastVisible; i++)
+              Positioned(
+                top: (i * lineHeight) - scrollOffset,
+                left: 0,
+                right: 0,
+                height: lineHeight,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: AppConstants.spaceSm),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      '${i + 1}',
+                      style: TextStyle(
+                        fontFamily: editorFontFamily,
+                        fontSize: fontSize * 0.85,
+                        color: i == currentLine ? scheme.text : scheme.gutterText,
+                        fontWeight: i == currentLine ? FontWeight.w600 : FontWeight.normal,
+                      ),
                     ),
                   ),
                 ),
               ),
-            );
-          }),
+          ],
         ),
       ),
     );

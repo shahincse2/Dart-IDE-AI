@@ -13,20 +13,21 @@ import '../widgets/console_panel.dart';
 import '../widgets/file_tab_bar.dart';
 import '../widgets/file_tree.dart';
 import '../widgets/find_replace_bar.dart';
+import '../widgets/font_size_dialog.dart';
+import '../widgets/go_to_line_dialog.dart';
 
 /// The main workspace. This screen owns the responsive shell described
 /// in Section 44:
 ///   - Portrait: drawer for file navigation, editor fills the rest.
 ///   - Landscape / tablet: persistent sidebar beside the editor.
 ///
-/// What's real as of Phase 7 (Part 1): Find & Replace, shown as a bar
-/// above the editor with match count, next/prev navigation, and
-/// replace/replace-all — plus everything from Phases 2-6 (real
-/// multi-file tabs, each with its own [CodeEditorController] so
-/// switching tabs preserves cursor position and undo history). Still
-/// to come this phase: go to line, undo/redo, word wrap, font size.
-/// Still placeholders after that: interactive stdin / argument entry
-/// (Phase 8).
+/// What's real as of Phase 7 (complete): Find & Replace, Go to line,
+/// real Undo/Redo (Flutter's built-in `UndoHistoryController`, one per
+/// open tab), a font-size stepper, and a word-wrap toggle — off
+/// horizontally scrolls long lines instead of wrapping them, with the
+/// gutter staying fixed on the left. All in the app bar's search icon
+/// and overflow menu, plus everything from Phases 2-6. Still
+/// placeholders: interactive stdin / argument entry (Phase 8).
 class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key});
 
@@ -37,6 +38,7 @@ class EditorScreen extends StatefulWidget {
 class _EditorScreenState extends State<EditorScreen> {
   late final FileProvider _fileProvider;
   final Map<String, CodeEditorController> _controllers = {};
+  final Map<String, UndoHistoryController> _undoControllers = {};
   final Set<String> _loadingPaths = {};
   bool _showFindReplace = false;
 
@@ -59,6 +61,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final toRemove = _controllers.keys.where((path) => !openTabs.contains(path)).toList();
     for (final path in toRemove) {
       _controllers.remove(path)?.dispose();
+      _undoControllers.remove(path)?.dispose();
     }
 
     for (final path in openTabs) {
@@ -88,6 +91,7 @@ class _EditorScreenState extends State<EditorScreen> {
       controller.addListener(() => _fileProvider.scheduleAutoSave(path, controller.text));
 
       _controllers[path] = controller;
+      _undoControllers[path] = UndoHistoryController();
       _loadingPaths.remove(path);
       if (mounted) setState(() {});
     }
@@ -99,6 +103,9 @@ class _EditorScreenState extends State<EditorScreen> {
     _fileProvider.flushAllPendingSaves();
     for (final controller in _controllers.values) {
       controller.dispose();
+    }
+    for (final undoController in _undoControllers.values) {
+      undoController.dispose();
     }
     super.dispose();
   }
@@ -119,6 +126,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
     final activePath = fileProvider.activeTab;
     final activeController = activePath != null ? _controllers[activePath] : null;
+    final activeUndoController = activePath != null ? _undoControllers[activePath] : null;
 
     final isTablet = AppConstants.isTablet(context);
     final isLandscape = AppConstants.isLandscape(context);
@@ -126,7 +134,9 @@ class _EditorScreenState extends State<EditorScreen> {
 
     final editorArea = _EditorBody(
       controller: activeController,
+      undoController: activeUndoController,
       fontSize: settings.editorFontSize,
+      wordWrap: settings.wordWrap,
       showFindReplace: _showFindReplace && activeController != null,
       onCloseFindReplace: () => setState(() => _showFindReplace = false),
     );
@@ -152,6 +162,12 @@ class _EditorScreenState extends State<EditorScreen> {
         onFindPressed: activeController != null
             ? () => setState(() => _showFindReplace = !_showFindReplace)
             : null,
+        onGoToLinePressed: activeController != null
+            ? () => showGoToLineDialog(context, activeController)
+            : null,
+        wordWrap: settings.wordWrap,
+        onToggleWordWrap: () => settings.setWordWrap(!settings.wordWrap),
+        onFontSizePressed: () => showFontSizeDialog(context, settings),
       ),
       drawer: useSidebar ? null : const Drawer(child: FileTreeView()),
       body: SafeArea(
@@ -177,6 +193,10 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onRunPressed;
   final VoidCallback? onSavePressed;
   final VoidCallback? onFindPressed;
+  final VoidCallback? onGoToLinePressed;
+  final bool wordWrap;
+  final VoidCallback onToggleWordWrap;
+  final VoidCallback onFontSizePressed;
 
   const _EditorAppBar({
     required this.fileName,
@@ -186,6 +206,10 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onRunPressed,
     required this.onSavePressed,
     required this.onFindPressed,
+    required this.onGoToLinePressed,
+    required this.wordWrap,
+    required this.onToggleWordWrap,
+    required this.onFontSizePressed,
   });
 
   @override
@@ -228,10 +252,34 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
           color: isRunning ? Theme.of(context).colorScheme.error : null,
           onPressed: onRunPressed,
         ),
-        IconButton(
+        PopupMenuButton<VoidCallback>(
           tooltip: 'More',
-          icon: const Icon(Icons.more_vert_rounded),
-          onPressed: null,
+          enabled: onGoToLinePressed != null,
+          onSelected: (action) => action(),
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: onGoToLinePressed,
+              child: const ListTile(
+                leading: Icon(Icons.arrow_forward_rounded),
+                title: Text('Go to line'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            PopupMenuItem(
+              value: onFontSizePressed,
+              child: const ListTile(
+                leading: Icon(Icons.format_size_rounded),
+                title: Text('Font size'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            CheckedPopupMenuItem<VoidCallback>(
+              value: onToggleWordWrap,
+              checked: wordWrap,
+              padding: EdgeInsets.zero,
+              child: const Text('Word wrap'),
+            ),
+          ],
         ),
       ],
     );
@@ -243,13 +291,17 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
 
 class _EditorBody extends StatelessWidget {
   final CodeEditorController? controller;
+  final UndoHistoryController? undoController;
   final double fontSize;
+  final bool wordWrap;
   final bool showFindReplace;
   final VoidCallback onCloseFindReplace;
 
   const _EditorBody({
     required this.controller,
+    required this.undoController,
     required this.fontSize,
+    required this.wordWrap,
     required this.showFindReplace,
     required this.onCloseFindReplace,
   });
@@ -275,10 +327,16 @@ class _EditorBody extends StatelessWidget {
           // CodeEditor's doc comment. CodeEditor's own didUpdateWidget
           // handles the controller swap correctly on its own.
           child: controller != null
-              ? CodeEditor(controller: controller!, fontSize: fontSize)
+              ? CodeEditor(
+                  controller: controller!,
+                  undoController: undoController,
+                  fontSize: fontSize,
+                  wordWrap: wordWrap,
+                )
               : const _NoFileOpenPlaceholder(),
         ),
-        if (controller != null) CodingToolbar(controller: controller!),
+        if (controller != null && undoController != null)
+          CodingToolbar(controller: controller!, undoController: undoController!),
         const ConsolePanel(),
       ],
     );
