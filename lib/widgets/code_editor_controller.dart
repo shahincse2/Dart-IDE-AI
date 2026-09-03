@@ -23,6 +23,8 @@ class CodeEditorController extends TextEditingController {
   int _searchMatchLength = 0;
   int _activeSearchMatch = -1;
 
+  int? _errorLine;
+
   CodeEditorController({
     required EditorColorScheme scheme,
     int indentSize = 2,
@@ -68,6 +70,19 @@ class CodeEditorController extends TextEditingController {
     notifyListeners();
   }
 
+  /// 1-indexed line a runtime/syntax error was reported on (Section
+  /// 35), or null for no marker. This is a best-effort heuristic — see
+  /// `utils/runner_error_parser.dart`'s doc comment for why it isn't a
+  /// guaranteed API — so callers should treat a missing line as
+  /// "couldn't tell", not "no error".
+  int? get errorLine => _errorLine;
+
+  void setErrorLine(int? line) {
+    if (_errorLine == line) return;
+    _errorLine = line;
+    notifyListeners();
+  }
+
   @override
   set value(TextEditingValue newValue) {
     final oldValue = value;
@@ -78,6 +93,9 @@ class CodeEditorController extends TextEditingController {
     // try auto-pairing. The two never both apply to the same edit.
     final afterPair =
         identical(afterIndent, newValue) ? _applyAutoPair(oldValue, newValue) : afterIndent;
+    if (_errorLine != null && afterPair.text != oldValue.text) {
+      _errorLine = null;
+    }
     super.value = afterPair;
   }
 

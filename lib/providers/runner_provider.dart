@@ -5,10 +5,9 @@ import 'package:flutter/material.dart';
 import '../models/console_event.dart';
 import '../services/dart_runner_service.dart';
 
-/// Execution state for the currently open file. The real Console
-/// panel (Phase 4) will read [events] the same way the temporary
-/// output list in EditorScreen does now — this provider doesn't
-/// change when the console UI is built.
+/// Execution state for the currently open file. The Console panel
+/// (Phase 4) reads [events] the same way this provider exposes them —
+/// this provider doesn't change when the console UI changes.
 class RunnerProvider extends ChangeNotifier {
   final DartRunnerService _service;
   final List<ConsoleEvent> _events = [];
@@ -20,13 +19,17 @@ class RunnerProvider extends ChangeNotifier {
   List<ConsoleEvent> get events => List.unmodifiable(_events);
   bool get isRunning => _isRunning;
 
-  Future<void> run(String source) async {
+  /// [args] become `main`'s `List<String> args` parameter (Section 34)
+  /// — real support, since `tom_d4rt`'s `execute()` takes
+  /// `positionalArgs` directly (verified in Phase 3 before this was
+  /// wired up).
+  Future<void> run(String source, {List<String> args = const []}) async {
     await _subscription?.cancel();
     _events.clear();
     _isRunning = true;
     notifyListeners();
 
-    _subscription = _service.run(source).listen(
+    _subscription = _service.run(source, args: args).listen(
       (event) {
         _events.add(event);
         if (event.type == ConsoleEventType.exitCode) {

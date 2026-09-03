@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/console_event.dart';
 import '../providers/file_provider.dart';
 import '../providers/runner_provider.dart';
 import '../providers/settings_provider.dart';
 import '../utils/constants.dart';
+import '../utils/runner_error_parser.dart';
 import '../utils/themes.dart';
+import '../widgets/arguments_dialog.dart';
 import '../widgets/code_editor.dart';
 import '../widgets/code_editor_controller.dart';
 import '../widgets/coding_toolbar.dart';
@@ -21,13 +24,17 @@ import '../widgets/go_to_line_dialog.dart';
 ///   - Portrait: drawer for file navigation, editor fills the rest.
 ///   - Landscape / tablet: persistent sidebar beside the editor.
 ///
-/// What's real as of Phase 7 (complete): Find & Replace, Go to line,
-/// real Undo/Redo (Flutter's built-in `UndoHistoryController`, one per
-/// open tab), a font-size stepper, and a word-wrap toggle — off
-/// horizontally scrolls long lines instead of wrapping them, with the
-/// gutter staying fixed on the left. All in the app bar's search icon
-/// and overflow menu, plus everything from Phases 2-6. Still
-/// placeholders: interactive stdin / argument entry (Phase 8).
+/// What's real as of Phase 8: command-line arguments before Run (app
+/// bar's overflow menu, `main(List<String> args)` — verified real
+/// since `execute()` takes `positionalArgs` directly), best-effort
+/// error-line highlighting in the editor when the interpreter's error
+/// text contains a parseable line number, and clearer Stop/Timeout
+/// messages in the console. NOT implemented: interactive stdin —
+/// after checking, there's no confirmed way to intercept
+/// `stdin.readLineSync()` calls from `tom_d4rt`'s public API without
+/// either faking it or granting real (and here, useless) OS-level
+/// `dart:io` access, so this stays honestly unbuilt rather than faked.
+/// Plus everything from Phases 2-7.
 class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key});
 
@@ -37,10 +44,14 @@ class EditorScreen extends StatefulWidget {
 
 class _EditorScreenState extends State<EditorScreen> {
   late final FileProvider _fileProvider;
+  late final RunnerProvider _runnerProvider;
   final Map<String, CodeEditorController> _controllers = {};
   final Map<String, UndoHistoryController> _undoControllers = {};
+  final Map<String, List<String>> _argsByPath = {};
   final Set<String> _loadingPaths = {};
   bool _showFindReplace = false;
+  String? _lastRunPath;
+  int _lastSeenRunnerEventCount = 0;
 
   @override
   void initState() {
@@ -48,9 +59,36 @@ class _EditorScreenState extends State<EditorScreen> {
     _fileProvider = context.read<FileProvider>();
     _fileProvider.addListener(_onFileProviderChanged);
     _syncControllers();
+
+    _runnerProvider = context.read<RunnerProvider>();
+    _runnerProvider.addListener(_onRunnerChanged);
   }
 
   void _onFileProviderChanged() => _syncControllers();
+
+  /// Looks for a line number in any new stderr output and, if found,
+  /// marks it on whichever file was actually running (Section 35) —
+  /// best-effort, see runner_error_parser.dart for why this can't be
+  /// guaranteed to always find one.
+  void _onRunnerChanged() {
+    final events = _runnerProvider.events;
+    if (events.length > _lastSeenRunnerEventCount) {
+      final newEvents = events.sublist(_lastSeenRunnerEventCount);
+      final runPath = _lastRunPath;
+      if (runPath != null) {
+        for (final event in newEvents) {
+          if (event.type == ConsoleEventType.stderr) {
+            final line = parseErrorLine(event.text ?? '');
+            if (line != null) {
+              _controllers[runPath]?.setErrorLine(line);
+              break;
+            }
+          }
+        }
+      }
+    }
+    _lastSeenRunnerEventCount = events.length;
+  }
 
   /// Keeps [_controllers] matched to [FileProvider.openTabs]: disposes
   /// controllers for tabs that closed, and creates + loads one for any
@@ -62,6 +100,7 @@ class _EditorScreenState extends State<EditorScreen> {
     for (final path in toRemove) {
       _controllers.remove(path)?.dispose();
       _undoControllers.remove(path)?.dispose();
+      _argsByPath.remove(path);
     }
 
     for (final path in openTabs) {
@@ -101,6 +140,7 @@ class _EditorScreenState extends State<EditorScreen> {
   void dispose() {
     _fileProvider.removeListener(_onFileProviderChanged);
     _fileProvider.flushAllPendingSaves();
+    _runnerProvider.removeListener(_onRunnerChanged);
     for (final controller in _controllers.values) {
       controller.dispose();
     }
@@ -153,7 +193,10 @@ class _EditorScreenState extends State<EditorScreen> {
                 if (runner.isRunning) {
                   runner.stop();
                 } else {
-                  runner.run(activeController.text);
+                  activeController.setErrorLine(null);
+                  _lastRunPath = activePath;
+                  _lastSeenRunnerEventCount = 0;
+                  runner.run(activeController.text, args: _argsByPath[activePath] ?? const []);
                 }
               },
         onSavePressed: activeController != null
@@ -165,6 +208,14 @@ class _EditorScreenState extends State<EditorScreen> {
         onGoToLinePressed: activeController != null
             ? () => showGoToLineDialog(context, activeController)
             : null,
+        onArgumentsPressed: activeController != null
+            ? () async {
+                final current = _argsByPath[activePath]?.join(' ') ?? '';
+                final result = await showArgumentsDialog(context, current);
+                if (result != null) setState(() => _argsByPath[activePath!] = result);
+              }
+            : null,
+        argsCount: activePath != null ? (_argsByPath[activePath]?.length ?? 0) : 0,
         wordWrap: settings.wordWrap,
         onToggleWordWrap: () => settings.setWordWrap(!settings.wordWrap),
         onFontSizePressed: () => showFontSizeDialog(context, settings),
@@ -194,6 +245,8 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onSavePressed;
   final VoidCallback? onFindPressed;
   final VoidCallback? onGoToLinePressed;
+  final VoidCallback? onArgumentsPressed;
+  final int argsCount;
   final bool wordWrap;
   final VoidCallback onToggleWordWrap;
   final VoidCallback onFontSizePressed;
@@ -207,6 +260,8 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onSavePressed,
     required this.onFindPressed,
     required this.onGoToLinePressed,
+    required this.onArgumentsPressed,
+    required this.argsCount,
     required this.wordWrap,
     required this.onToggleWordWrap,
     required this.onFontSizePressed,
@@ -270,6 +325,14 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
               child: const ListTile(
                 leading: Icon(Icons.format_size_rounded),
                 title: Text('Font size'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            PopupMenuItem(
+              value: onArgumentsPressed,
+              child: ListTile(
+                leading: const Icon(Icons.terminal_rounded),
+                title: Text(argsCount > 0 ? 'Arguments ($argsCount)' : 'Arguments'),
                 contentPadding: EdgeInsets.zero,
               ),
             ),

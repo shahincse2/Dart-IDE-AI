@@ -200,6 +200,12 @@ class _CodeEditorState extends State<CodeEditor> {
               builder: (context, constraints) {
                 final editorStack = Stack(
                   children: [
+                    _ErrorLineHighlight(
+                      scheme: scheme,
+                      lineHeight: _lineHeight,
+                      errorLine: widget.controller.errorLine,
+                      scrollOffset: scrollOffset,
+                    ),
                     _CurrentLineHighlight(
                       scheme: scheme,
                       lineHeight: _lineHeight,
@@ -350,6 +356,37 @@ class _LineNumberGutter extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ErrorLineHighlight extends StatelessWidget {
+  final EditorColorScheme scheme;
+  final double lineHeight;
+  final int? errorLine;
+  final double scrollOffset;
+
+  const _ErrorLineHighlight({
+    required this.scheme,
+    required this.lineHeight,
+    required this.errorLine,
+    required this.scrollOffset,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final line = errorLine;
+    if (line == null || line < 1) return const SizedBox.shrink();
+
+    final top = ((line - 1) * lineHeight) - scrollOffset; // errorLine is 1-indexed
+    return Positioned(
+      top: top,
+      left: 0,
+      right: 0,
+      height: lineHeight,
+      child: IgnorePointer(
+        child: ColoredBox(color: const Color(0xFFE06C75).withOpacity(0.18)),
       ),
     );
   }

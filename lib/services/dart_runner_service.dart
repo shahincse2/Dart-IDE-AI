@@ -46,7 +46,8 @@ class DartRunnerService {
 
   /// Requests early termination (Section 33's Stop button). Genuinely
   /// kills the isolate rather than merely abandoning a Future.
-  void stop() => _terminate(exitCode: 130);
+  void stop() =>
+      _terminate(exitCode: 130, message: ConsoleEvent.systemInfo('Stopped'));
 
   Future<void> _start(
     String source,
@@ -72,8 +73,11 @@ class DartRunnerService {
     }
 
     _timeoutTimer = Timer(timeout, () {
-      controller.add(ConsoleEvent.stderr('Time Limit Exceeded'));
-      _terminate(exitCode: 124);
+      _terminate(
+        exitCode: 124,
+        message:
+            ConsoleEvent.stderr('Time Limit Exceeded (${timeout.inSeconds}s)'),
+      );
     });
 
     receivePort.listen((message) {
@@ -104,8 +108,12 @@ class DartRunnerService {
     });
   }
 
-  void _terminate({required int exitCode}) {
+  /// Kills the running isolate and reports why, so "Program finished
+  /// (exit code N)" alone never has to speak for a Stop/timeout — the
+  /// preceding message says what actually happened.
+  void _terminate({required int exitCode, ConsoleEvent? message}) {
     if (_isolate == null) return;
+    if (message != null) _controller?.add(message);
     _controller?.add(ConsoleEvent.exitCode(exitCode));
     _isolate!.kill(priority: Isolate.immediate);
     _cleanup();
@@ -127,7 +135,8 @@ class _RunRequest {
   final String source;
   final List<String> args;
   final SendPort sendPort;
-  const _RunRequest({required this.source, required this.args, required this.sendPort});
+  const _RunRequest(
+      {required this.source, required this.args, required this.sendPort});
 }
 
 enum _RunnerMessageType { stdout, stderr, done }
