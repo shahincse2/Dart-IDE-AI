@@ -17,8 +17,6 @@ dependencies:
   # State management
   provider: ^6.1.2
 
-  # Local storage — added properly in Phase 5 (File Management),
-  # declared now so the foundation's SettingsProvider can persist theme/font choices.
   shared_preferences: ^2.2.3
   path_provider: ^2.1.5
   path: ^1.9.0
@@ -26,6 +24,25 @@ dependencies:
   # Dart execution engine (Phase 3). Runs inside a dedicated Isolate —
   # see services/dart_runner_service.dart for why.
   tom_d4rt: ^1.29.0
+
+  # UI Run mode (Phase 9): interprets a Dart script's top-level
+  # `Widget build(BuildContext)` into a real, live Flutter widget tree.
+  # This is tom_d4rt's own Flutter-facing companion package — NOT the
+  # master doc's originally-suggested `flutter_d4rt`, which turned out
+  # to be built on a different, unrelated interpreter engine. See
+  # services/ui_runner_service.dart for the full reasoning.
+  #
+  # NOTE: verify this resolves cleanly against tom_d4rt ^1.29.0 above
+  # when you run `flutter pub get` — tom_d4rt_flutter depends on a
+  # specific tom_d4rt version internally, and that couldn't be checked
+  # without pub.dev access in this environment. If `pub get` reports a
+  # version conflict, the fix is adjusting the tom_d4rt constraint
+  # above to whatever tom_d4rt_flutter actually requires.
+  tom_d4rt_flutter: ^1.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
 
 flutter:
   uses-material-design: true

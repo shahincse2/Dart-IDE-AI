@@ -18,23 +18,24 @@ import '../widgets/file_tree.dart';
 import '../widgets/find_replace_bar.dart';
 import '../widgets/font_size_dialog.dart';
 import '../widgets/go_to_line_dialog.dart';
+import 'ui_preview_screen.dart';
 
 /// The main workspace. This screen owns the responsive shell described
 /// in Section 44:
 ///   - Portrait: drawer for file navigation, editor fills the rest.
 ///   - Landscape / tablet: persistent sidebar beside the editor.
 ///
-/// What's real as of Phase 8: command-line arguments before Run (app
-/// bar's overflow menu, `main(List<String> args)` — verified real
-/// since `execute()` takes `positionalArgs` directly), best-effort
-/// error-line highlighting in the editor when the interpreter's error
-/// text contains a parseable line number, and clearer Stop/Timeout
-/// messages in the console. NOT implemented: interactive stdin —
-/// after checking, there's no confirmed way to intercept
-/// `stdin.readLineSync()` calls from `tom_d4rt`'s public API without
-/// either faking it or granting real (and here, useless) OS-level
-/// `dart:io` access, so this stays honestly unbuilt rather than faked.
-/// Plus everything from Phases 2-7.
+/// What's real as of Phase 9: "Preview UI" (app bar's overflow menu)
+/// interprets the current file as a Flutter UI script — a top-level
+/// `Widget build(BuildContext context)` function — via
+/// `tom_d4rt_flutter`, rendering a genuine, live widget tree
+/// full-screen (real Material widgets, real state/gestures), not a
+/// mock. Honest limitation: this runs on the main isolate (Widgets
+/// can't cross an Isolate boundary the way console output can), so
+/// there's no Isolate-based Stop for it the way DartRunnerService has
+/// — see ui_runner_service.dart. Plus everything from Phases 2-8,
+/// including Phase 8's own honest gap: interactive stdin, still not
+/// implemented after finding no confirmed way to intercept it.
 class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key});
 
@@ -219,6 +220,13 @@ class _EditorScreenState extends State<EditorScreen> {
         wordWrap: settings.wordWrap,
         onToggleWordWrap: () => settings.setWordWrap(!settings.wordWrap),
         onFontSizePressed: () => showFontSizeDialog(context, settings),
+        onPreviewUiPressed: activeController != null
+            ? () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => UiPreviewScreen(source: activeController.text),
+                  ),
+                )
+            : null,
       ),
       drawer: useSidebar ? null : const Drawer(child: FileTreeView()),
       body: SafeArea(
@@ -250,6 +258,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool wordWrap;
   final VoidCallback onToggleWordWrap;
   final VoidCallback onFontSizePressed;
+  final VoidCallback? onPreviewUiPressed;
 
   const _EditorAppBar({
     required this.fileName,
@@ -265,6 +274,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.wordWrap,
     required this.onToggleWordWrap,
     required this.onFontSizePressed,
+    required this.onPreviewUiPressed,
   });
 
   @override
@@ -341,6 +351,15 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
               checked: wordWrap,
               padding: EdgeInsets.zero,
               child: const Text('Word wrap'),
+            ),
+            const PopupMenuDivider(),
+            PopupMenuItem(
+              value: onPreviewUiPressed,
+              child: const ListTile(
+                leading: Icon(Icons.visibility_outlined),
+                title: Text('Preview UI'),
+                contentPadding: EdgeInsets.zero,
+              ),
             ),
           ],
         ),

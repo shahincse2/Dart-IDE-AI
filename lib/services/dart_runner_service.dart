@@ -175,10 +175,14 @@ Future<void> _isolateMain(_RunRequest request) async {
       },
     ));
   }, (error, stack) {
-    // tom_d4rt's own errors generally stringify with useful context
-    // (message plus source location where the interpreter tracks it);
-    // this doesn't attempt to re-parse or improve on that formatting.
-    sendPort.send(_RunnerMessage.stderr(error.toString()));
+    // DIAGNOSTIC (temporary): the plain exception message (e.g.
+    // RangeError's toString()) confirmed to carry no line info at all
+    // — that's normal Dart behavior, not specific to tom_d4rt. This
+    // prints the stack trace too, purely to check whether IT has
+    // anything usable. Meant to come back out once we know either way
+    // — see runner_error_parser.dart.
+    sendPort.send(_RunnerMessage.stderr(
+        '${error.toString()}\n[stack trace — diagnostic]\n$stack'));
     sendPort.send(const _RunnerMessage.done(1));
   });
 }
