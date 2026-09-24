@@ -17,6 +17,14 @@ import 'package:tom_d4rt_flutter/tom_d4rt_flutter.dart';
 /// UI on Flutter" and shares everything (sandboxing model, bridge
 /// surface, semantics) with the interpreter this app already uses.
 ///
+/// CONFIRMED on a real device: scripts must start with
+/// `import 'package:flutter/material.dart';` — without it, referring
+/// to `Widget`, `Scaffold`, or any other Material class fails with
+/// "Type 'Widget' not found", exactly like a real (non-interpreted)
+/// Dart file would behave. This isn't optional/implicit the way it
+/// might be tempting to assume for a "UI script" mode — the
+/// interpreter treats it as ordinary Dart source, imports included.
+///
 /// Important constraint, stated plainly rather than hidden: this runs
 /// on the main UI isolate. A `Widget` and a `BuildContext` can't cross
 /// an Isolate boundary, so there's no way to give UI Run the same
@@ -39,12 +47,13 @@ class UiRunnerService {
     _runner.warmup();
   }
 
-  /// Interprets [source] — expected to declare a top-level
+  /// Interprets [source] — expected to start with
+  /// `import 'package:flutter/material.dart';` and declare a top-level
   /// `Widget build(BuildContext context)` function using real Flutter
   /// Material classes — and returns the live widget it produces.
   /// Throws (typically `SourceFlutterD4rtException`, but callers
-  /// should catch broadly) on a syntax error, a runtime error, or
-  /// source that isn't a UI script at all.
+  /// should catch broadly) on a syntax error, a runtime error, a
+  /// missing import, or source that isn't a UI script at all.
   Widget buildWidget(String source, BuildContext context) {
     return _runner.build<Widget>(source, context);
   }

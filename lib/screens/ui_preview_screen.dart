@@ -77,6 +77,15 @@ class _UiPreviewError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final message = error.toString();
+    // "Type 'Widget' not found" (and similar "Type 'X' not found"
+    // messages for other Material classes) is confirmed, on a real
+    // device, to almost always mean the script is missing its
+    // `import 'package:flutter/material.dart';` line — interpreted UI
+    // scripts are ordinary Dart source, imports included, not
+    // implicitly Flutter-aware.
+    final looksLikeMissingImport = message.contains("not found");
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppConstants.spaceLg),
       child: Column(
@@ -100,6 +109,16 @@ class _UiPreviewError extends StatelessWidget {
             'Widget build(BuildContext context) function, built from '
             'real Flutter Material widgets.',
           ),
+          if (looksLikeMissingImport) ...[
+            const SizedBox(height: AppConstants.spaceSm),
+            Text(
+              "This often means the script is missing "
+              "import 'package:flutter/material.dart'; at the top — "
+              "add it and try again.",
+              style:
+                  TextStyle(fontWeight: FontWeight.w600, color: scheme.primary),
+            ),
+          ],
           const SizedBox(height: AppConstants.spaceMd),
           Container(
             width: double.infinity,
@@ -109,7 +128,7 @@ class _UiPreviewError extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              error.toString(),
+              message,
               style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 12.5,

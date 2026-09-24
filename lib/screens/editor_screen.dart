@@ -34,8 +34,11 @@ import 'ui_preview_screen.dart';
 /// can't cross an Isolate boundary the way console output can), so
 /// there's no Isolate-based Stop for it the way DartRunnerService has
 /// — see ui_runner_service.dart. Plus everything from Phases 2-8,
-/// including Phase 8's own honest gap: interactive stdin, still not
-/// implemented after finding no confirmed way to intercept it.
+/// including two confirmed (not just unverified) gaps from Phase 8:
+/// interactive stdin isn't implemented, and error-line highlighting
+/// doesn't fire for ordinary runtime exceptions (RangeError and
+/// similar) — tested on a real device and confirmed tom_d4rt gives no
+/// location data for those at all, in the message or the stack trace.
 class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key});
 

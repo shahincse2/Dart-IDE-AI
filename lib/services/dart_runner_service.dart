@@ -46,8 +46,7 @@ class DartRunnerService {
 
   /// Requests early termination (Section 33's Stop button). Genuinely
   /// kills the isolate rather than merely abandoning a Future.
-  void stop() =>
-      _terminate(exitCode: 130, message: ConsoleEvent.systemInfo('Stopped'));
+  void stop() => _terminate(exitCode: 130, message: ConsoleEvent.systemInfo('Stopped'));
 
   Future<void> _start(
     String source,
@@ -75,8 +74,7 @@ class DartRunnerService {
     _timeoutTimer = Timer(timeout, () {
       _terminate(
         exitCode: 124,
-        message:
-            ConsoleEvent.stderr('Time Limit Exceeded (${timeout.inSeconds}s)'),
+        message: ConsoleEvent.stderr('Time Limit Exceeded (${timeout.inSeconds}s)'),
       );
     });
 
@@ -135,8 +133,7 @@ class _RunRequest {
   final String source;
   final List<String> args;
   final SendPort sendPort;
-  const _RunRequest(
-      {required this.source, required this.args, required this.sendPort});
+  const _RunRequest({required this.source, required this.args, required this.sendPort});
 }
 
 enum _RunnerMessageType { stdout, stderr, done }
@@ -175,14 +172,20 @@ Future<void> _isolateMain(_RunRequest request) async {
       },
     ));
   }, (error, stack) {
-    // DIAGNOSTIC (temporary): the plain exception message (e.g.
-    // RangeError's toString()) confirmed to carry no line info at all
-    // — that's normal Dart behavior, not specific to tom_d4rt. This
-    // prints the stack trace too, purely to check whether IT has
-    // anything usable. Meant to come back out once we know either way
-    // — see runner_error_parser.dart.
-    sendPort.send(_RunnerMessage.stderr(
-        '${error.toString()}\n[stack trace — diagnostic]\n$stack'));
+    // Confirmed by real-device testing: for a runtime exception (e.g.
+    // RangeError), neither the exception's own message NOR its stack
+    // trace carries a usable line number in the *interpreted* source —
+    // the stack trace is entirely tom_d4rt's own AST-visitor call
+    // stack (interpreter_visitor.dart, analyzer's ast.dart, ...), with
+    // no reference back to the user's file at all. So this doesn't
+    // attempt to parse the stack trace for a location; only the
+    // exception's own message is kept, exactly as a normal Dart
+    // exception's toString() would show it. See
+    // utils/runner_error_parser.dart for what this means for
+    // error-line highlighting (mainly limited to syntax/parse errors,
+    // which the analyzer does report with a position — runtime
+    // exceptions like this one won't get a marker).
+    sendPort.send(_RunnerMessage.stderr(error.toString()));
     sendPort.send(const _RunnerMessage.done(1));
   });
 }
