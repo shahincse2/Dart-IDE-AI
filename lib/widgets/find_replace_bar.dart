@@ -11,7 +11,16 @@ class FindReplaceBar extends StatefulWidget {
   final CodeEditorController controller;
   final VoidCallback onClose;
 
-  const FindReplaceBar({super.key, required this.controller, required this.onClose});
+  /// Ctrl+H (Section 43) opens the bar with the replace row already
+  /// visible, rather than requiring an extra tap to expand it.
+  final bool initiallyExpanded;
+
+  const FindReplaceBar({
+    super.key,
+    required this.controller,
+    required this.onClose,
+    this.initiallyExpanded = false,
+  });
 
   @override
   State<FindReplaceBar> createState() => _FindReplaceBarState();
@@ -21,7 +30,7 @@ class _FindReplaceBarState extends State<FindReplaceBar> {
   final _searchController = TextEditingController();
   final _replaceController = TextEditingController();
   final _searchFocusNode = FocusNode();
-  bool _showReplace = false;
+  late bool _showReplace = widget.initiallyExpanded;
 
   List<int> _matchStarts = [];
   int _currentMatch = -1;
@@ -30,10 +39,6 @@ class _FindReplaceBarState extends State<FindReplaceBar> {
   void initState() {
     super.initState();
     _searchController.addListener(_updateMatches);
-    // `autofocus` only takes effect when nothing else in the scope
-    // already has focus — the editor's TextField does, since the user
-    // was just typing in it when they tapped the search icon. Explicitly
-    // requesting focus after the frame renders actually moves it here.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _searchFocusNode.requestFocus();
     });
@@ -41,9 +46,10 @@ class _FindReplaceBarState extends State<FindReplaceBar> {
 
   @override
   void dispose() {
-    // Clear highlights on the controller so they don't linger after
-    // the bar closes.
-    widget.controller.setSearchHighlights(const []);
+    final controller = widget.controller;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.setSearchHighlights(const []);
+    });
     _searchController.dispose();
     _replaceController.dispose();
     _searchFocusNode.dispose();
@@ -87,7 +93,8 @@ class _FindReplaceBarState extends State<FindReplaceBar> {
 
     final start = _matchStarts[wrapped];
     final length = _searchController.text.length;
-    widget.controller.selection = TextSelection(baseOffset: start, extentOffset: start + length);
+    widget.controller.selection =
+        TextSelection(baseOffset: start, extentOffset: start + length);
   }
 
   void _next() => _goToMatch(_currentMatch + 1);
@@ -111,7 +118,8 @@ class _FindReplaceBarState extends State<FindReplaceBar> {
   void _replaceAll() {
     final query = _searchController.text;
     if (query.isEmpty) return;
-    final newText = widget.controller.text.replaceAll(query, _replaceController.text);
+    final newText =
+        widget.controller.text.replaceAll(query, _replaceController.text);
     widget.controller.value = TextEditingValue(
       text: newText,
       selection: const TextSelection.collapsed(offset: 0),
@@ -126,7 +134,8 @@ class _FindReplaceBarState extends State<FindReplaceBar> {
 
     return Container(
       color: scheme.gutterBackground,
-      padding: const EdgeInsets.symmetric(horizontal: AppConstants.spaceSm, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppConstants.spaceSm, vertical: 2),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -148,7 +157,9 @@ class _FindReplaceBarState extends State<FindReplaceBar> {
               Text(
                 _searchController.text.isEmpty
                     ? ''
-                    : (hasMatches ? '${_currentMatch + 1}/${_matchStarts.length}' : '0/0'),
+                    : (hasMatches
+                        ? '${_currentMatch + 1}/${_matchStarts.length}'
+                        : '0/0'),
                 style: TextStyle(fontSize: 12, color: scheme.gutterText),
               ),
               IconButton(
@@ -164,7 +175,9 @@ class _FindReplaceBarState extends State<FindReplaceBar> {
               IconButton(
                 tooltip: _showReplace ? 'Hide replace' : 'Show replace',
                 icon: Icon(
-                  _showReplace ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                  _showReplace
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
                   size: 20,
                 ),
                 onPressed: () => setState(() => _showReplace = !_showReplace),

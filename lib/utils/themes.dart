@@ -5,9 +5,7 @@ import 'package:flutter/material.dart';
 ///
 /// This is deliberately separate from [AppTheme] (Material chrome)
 /// because the editor's palette must stay legible for code regardless
-/// of what accent color the rest of the app uses — and because Phase
-/// 10 will let users pick an *editor* theme (Dracula, Monokai, ...)
-/// independently of light/dark app chrome.
+/// of what accent color the rest of the app uses.
 @immutable
 class EditorColorScheme {
   final String name;
@@ -86,8 +84,48 @@ class EditorColorScheme {
     operatorColor: Color(0xFF993C1D),
   );
 
-  // Dracula, Monokai, and any additional editor themes are added here
-  // in Phase 10 once the theme-selection UI exists to expose them.
+  /// Phase 10: the two classic editor themes Section 42 names
+  /// explicitly, using their well-known real palettes.
+  static const dracula = EditorColorScheme(
+    name: 'Dracula',
+    background: Color(0xFF282A36),
+    gutterBackground: Color(0xFF282A36),
+    gutterText: Color(0xFF6272A4),
+    text: Color(0xFFF8F8F2),
+    currentLine: Color(0xFF44475A),
+    selection: Color(0xFF44475A),
+    cursor: Color(0xFFF8F8F0),
+    keyword: Color(0xFFFF79C6),
+    string: Color(0xFFF1FA8C),
+    comment: Color(0xFF6272A4),
+    number: Color(0xFFBD93F9),
+    function: Color(0xFF50FA7B),
+    type: Color(0xFF8BE9FD),
+    variable: Color(0xFFF8F8F2),
+    operatorColor: Color(0xFFFF79C6),
+  );
+
+  static const monokai = EditorColorScheme(
+    name: 'Monokai',
+    background: Color(0xFF272822),
+    gutterBackground: Color(0xFF272822),
+    gutterText: Color(0xFF75715E),
+    text: Color(0xFFF8F8F2),
+    currentLine: Color(0xFF3E3D32),
+    selection: Color(0xFF49483E),
+    cursor: Color(0xFFF8F8F0),
+    keyword: Color(0xFFF92672),
+    string: Color(0xFFE6DB74),
+    comment: Color(0xFF75715E),
+    number: Color(0xFFAE81FF),
+    function: Color(0xFFA6E22E),
+    type: Color(0xFF66D9EF),
+    variable: Color(0xFFF8F8F2),
+    operatorColor: Color(0xFFF92672),
+  );
+
+  /// All themes, in the order they should be offered in Settings.
+  static const List<EditorColorScheme> all = [dark, light, dracula, monokai];
 }
 
 /// App-level Material theming (chrome: app bar, buttons, drawer, etc).
@@ -145,14 +183,10 @@ const String editorFontFamily = 'monospace';
 
 /// Resolves a persisted theme name (from [SettingsModel.editorThemeName])
 /// to its [EditorColorScheme]. Falls back to Dark for anything
-/// unrecognized (e.g. a name from a future Phase-10 theme not yet
-/// implemented, or corrupted preferences).
+/// unrecognized (e.g. corrupted preferences).
 EditorColorScheme editorSchemeFromName(String name) {
-  switch (name) {
-    case 'Light':
-      return EditorColorScheme.light;
-    case 'Dark':
-    default:
-      return EditorColorScheme.dark;
+  for (final scheme in EditorColorScheme.all) {
+    if (scheme.name == name) return scheme;
   }
+  return EditorColorScheme.dark;
 }

@@ -5,10 +5,9 @@ import '../models/project_model.dart';
 import '../providers/file_provider.dart';
 import '../utils/constants.dart';
 import 'editor_screen.dart';
+import 'settings_screen.dart';
 
-/// Landing screen — lists real projects from [FileProvider] now that
-/// Phase 5's file system exists (Phase 1's version showed an honest
-/// empty state because there was nothing to list yet).
+/// Landing screen — lists real projects from [FileProvider].
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -20,9 +19,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Deferred to after the first frame since it touches a provider
-    // during screen construction; loadProjects() itself is async
-    // filesystem work regardless.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) context.read<FileProvider>().loadProjects();
     });
@@ -34,7 +30,18 @@ class _HomeScreenState extends State<HomeScreen> {
     final hasProjects = fileProvider.projects.isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(title: const Text(AppConstants.appName)),
+      appBar: AppBar(
+        title: const Text(AppConstants.appName),
+        actions: [
+          IconButton(
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: fileProvider.isLoadingProjects
             ? const Center(child: CircularProgressIndicator())
@@ -84,9 +91,6 @@ class _HomeScreenState extends State<HomeScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const EditorScreen()),
     );
-    // Coming back from the editor doesn't need a project-list refresh —
-    // creating/renaming/deleting *projects* only happens from this
-    // screen, so the list can't have gone stale while the editor was open.
   }
 }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/console_event.dart';
@@ -18,6 +19,7 @@ import '../widgets/file_tree.dart';
 import '../widgets/find_replace_bar.dart';
 import '../widgets/font_size_dialog.dart';
 import '../widgets/go_to_line_dialog.dart';
+import 'settings_screen.dart';
 import 'ui_preview_screen.dart';
 
 /// The main workspace. This screen owns the responsive shell described
@@ -25,20 +27,20 @@ import 'ui_preview_screen.dart';
 ///   - Portrait: drawer for file navigation, editor fills the rest.
 ///   - Landscape / tablet: persistent sidebar beside the editor.
 ///
-/// What's real as of Phase 9: "Preview UI" (app bar's overflow menu)
-/// interprets the current file as a Flutter UI script — a top-level
-/// `Widget build(BuildContext context)` function — via
-/// `tom_d4rt_flutter`, rendering a genuine, live widget tree
-/// full-screen (real Material widgets, real state/gestures), not a
-/// mock. Honest limitation: this runs on the main isolate (Widgets
-/// can't cross an Isolate boundary the way console output can), so
-/// there's no Isolate-based Stop for it the way DartRunnerService has
-/// — see ui_runner_service.dart. Plus everything from Phases 2-8,
-/// including two confirmed (not just unverified) gaps from Phase 8:
-/// interactive stdin isn't implemented, and error-line highlighting
-/// doesn't fire for ordinary runtime exceptions (RangeError and
-/// similar) — tested on a real device and confirmed tom_d4rt gives no
-/// location data for those at all, in the message or the stack trace.
+/// What's real as of Phase 10: a Settings entry point (app bar's
+/// overflow menu) into the real Settings screen — themes, font size,
+/// indent size, word wrap, auto save — plus Bluetooth/physical-
+/// keyboard shortcuts (Section 43): Ctrl+S save, Ctrl+Enter run/stop,
+/// Ctrl+F find, Ctrl+H find & replace, Ctrl+G go to line. Ctrl+Z/
+/// Ctrl+Shift+Z aren't bound here deliberately — Flutter's TextField
+/// already handles both natively via the `undoController` wired up in
+/// Phase 7. Plus everything from Phases 2-9: real multi-file tabs,
+/// live Dart execution with genuine Isolate-based Stop/timeout, the
+/// real Console panel, Find & Replace, Go to line, Undo/Redo,
+/// arguments, best-effort error-line highlighting, and UI Preview via
+/// tom_d4rt_flutter. Honest gaps carried forward: interactive stdin
+/// (no confirmed API), and UI Preview has no Isolate-based Stop
+/// (Widgets can't cross an Isolate boundary).
 class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key});
 
@@ -54,6 +56,7 @@ class _EditorScreenState extends State<EditorScreen> {
   final Map<String, List<String>> _argsByPath = {};
   final Set<String> _loadingPaths = {};
   bool _showFindReplace = false;
+  bool _findReplaceExpanded = false;
   String? _lastRunPath;
   int _lastSeenRunnerEventCount = 0;
 
@@ -73,7 +76,8 @@ class _EditorScreenState extends State<EditorScreen> {
   /// Looks for a line number in any new stderr output and, if found,
   /// marks it on whichever file was actually running (Section 35) —
   /// best-effort, see runner_error_parser.dart for why this can't be
-  /// guaranteed to always find one.
+  /// guaranteed to always find one (confirmed: it won't, for runtime
+  /// exceptions — only a real chance for syntax/parse errors).
   void _onRunnerChanged() {
     final events = _runnerProvider.events;
     if (events.length > _lastSeenRunnerEventCount) {
@@ -100,7 +104,8 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _syncControllers() async {
     final openTabs = _fileProvider.openTabs;
 
-    final toRemove = _controllers.keys.where((path) => !openTabs.contains(path)).toList();
+    final toRemove =
+        _controllers.keys.where((path) => !openTabs.contains(path)).toList();
     for (final path in toRemove) {
       _controllers.remove(path)?.dispose();
       _undoControllers.remove(path)?.dispose();
@@ -108,7 +113,8 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     for (final path in openTabs) {
-      if (_controllers.containsKey(path) || _loadingPaths.contains(path)) continue;
+      if (_controllers.containsKey(path) || _loadingPaths.contains(path))
+        continue;
       _loadingPaths.add(path);
 
       final settings = context.read<SettingsProvider>();
@@ -131,7 +137,8 @@ class _EditorScreenState extends State<EditorScreen> {
         text: content,
         selection: const TextSelection.collapsed(offset: 0),
       );
-      controller.addListener(() => _fileProvider.scheduleAutoSave(path, controller.text));
+      controller.addListener(
+          () => _fileProvider.scheduleAutoSave(path, controller.text));
 
       _controllers[path] = controller;
       _undoControllers[path] = UndoHistoryController();
@@ -154,6 +161,54 @@ class _EditorScreenState extends State<EditorScreen> {
     super.dispose();
   }
 
+  // ---- Shared action handlers — used by both the app bar buttons and
+  // the keyboard shortcuts below (Section 43), so there's exactly one
+  // place each action is implemented. ----
+
+  void _handleRunOrStop() {
+    final activePath = _fileProvider.activeTab;
+    final activeController =
+        activePath != null ? _controllers[activePath] : null;
+    if (activeController == null) return;
+    if (_runnerProvider.isRunning) {
+      _runnerProvider.stop();
+    } else {
+      activeController.setErrorLine(null);
+      _lastRunPath = activePath;
+      _lastSeenRunnerEventCount = 0;
+      _runnerProvider.run(activeController.text,
+          args: _argsByPath[activePath] ?? const []);
+    }
+  }
+
+  void _handleSave() {
+    final activePath = _fileProvider.activeTab;
+    final activeController =
+        activePath != null ? _controllers[activePath] : null;
+    if (activeController == null || activePath == null) return;
+    _fileProvider.saveNow(activePath, activeController.text);
+  }
+
+  /// Ctrl+F / Ctrl+H (Section 43): unlike the app bar's search icon
+  /// (a toggle), a keyboard shortcut should *open* Find — pressing it
+  /// again while already open shouldn't close the bar out from under
+  /// someone still typing a query.
+  void _handleOpenFind({required bool expandReplace}) {
+    if (_fileProvider.activeTab == null) return;
+    setState(() {
+      _showFindReplace = true;
+      _findReplaceExpanded = expandReplace;
+    });
+  }
+
+  void _handleGoToLine() {
+    final activePath = _fileProvider.activeTab;
+    final activeController =
+        activePath != null ? _controllers[activePath] : null;
+    if (activeController == null) return;
+    showGoToLineDialog(context, activeController);
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
@@ -169,8 +224,10 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     final activePath = fileProvider.activeTab;
-    final activeController = activePath != null ? _controllers[activePath] : null;
-    final activeUndoController = activePath != null ? _undoControllers[activePath] : null;
+    final activeController =
+        activePath != null ? _controllers[activePath] : null;
+    final activeUndoController =
+        activePath != null ? _undoControllers[activePath] : null;
 
     final isTablet = AppConstants.isTablet(context);
     final isLandscape = AppConstants.isLandscape(context);
@@ -182,54 +239,53 @@ class _EditorScreenState extends State<EditorScreen> {
       fontSize: settings.editorFontSize,
       wordWrap: settings.wordWrap,
       showFindReplace: _showFindReplace && activeController != null,
+      findReplaceExpanded: _findReplaceExpanded,
       onCloseFindReplace: () => setState(() => _showFindReplace = false),
     );
 
-    return Scaffold(
+    final scaffold = Scaffold(
       appBar: _EditorAppBar(
         fileName: fileProvider.activeFileName ?? 'No file open',
         isDirty: activePath != null && fileProvider.isDirty(activePath),
         useSidebar: useSidebar,
         isRunning: runner.isRunning,
-        onRunPressed: activeController == null
-            ? null
-            : () {
-                if (runner.isRunning) {
-                  runner.stop();
-                } else {
-                  activeController.setErrorLine(null);
-                  _lastRunPath = activePath;
-                  _lastSeenRunnerEventCount = 0;
-                  runner.run(activeController.text, args: _argsByPath[activePath] ?? const []);
-                }
-              },
-        onSavePressed: activeController != null
-            ? () => fileProvider.saveNow(activePath!, activeController.text)
-            : null,
+        onRunPressed: activeController == null ? null : _handleRunOrStop,
+        onSavePressed: activeController != null ? _handleSave : null,
         onFindPressed: activeController != null
-            ? () => setState(() => _showFindReplace = !_showFindReplace)
+            ? () => setState(() {
+                  if (_showFindReplace) {
+                    _showFindReplace = false;
+                  } else {
+                    _showFindReplace = true;
+                    _findReplaceExpanded = false;
+                  }
+                })
             : null,
-        onGoToLinePressed: activeController != null
-            ? () => showGoToLineDialog(context, activeController)
-            : null,
+        onGoToLinePressed: activeController != null ? _handleGoToLine : null,
         onArgumentsPressed: activeController != null
             ? () async {
                 final current = _argsByPath[activePath]?.join(' ') ?? '';
                 final result = await showArgumentsDialog(context, current);
-                if (result != null) setState(() => _argsByPath[activePath!] = result);
+                if (result != null)
+                  setState(() => _argsByPath[activePath!] = result);
               }
             : null,
-        argsCount: activePath != null ? (_argsByPath[activePath]?.length ?? 0) : 0,
+        argsCount:
+            activePath != null ? (_argsByPath[activePath]?.length ?? 0) : 0,
         wordWrap: settings.wordWrap,
         onToggleWordWrap: () => settings.setWordWrap(!settings.wordWrap),
         onFontSizePressed: () => showFontSizeDialog(context, settings),
         onPreviewUiPressed: activeController != null
             ? () => Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => UiPreviewScreen(source: activeController.text),
+                    builder: (_) =>
+                        UiPreviewScreen(source: activeController.text),
                   ),
                 )
             : null,
+        onSettingsPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+        ),
       ),
       drawer: useSidebar ? null : const Drawer(child: FileTreeView()),
       body: SafeArea(
@@ -242,6 +298,33 @@ class _EditorScreenState extends State<EditorScreen> {
                 ],
               )
             : editorArea,
+      ),
+    );
+
+    // Section 43's Bluetooth/physical-keyboard shortcuts. Ctrl+Z /
+    // Ctrl+Shift+Z are deliberately NOT bound here — Flutter's
+    // TextField already handles both natively once given an
+    // `undoController` (Phase 7), so adding our own binding would be
+    // redundant at best and could double-fire at worst.
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true):
+            _handleSave,
+        const SingleActivator(LogicalKeyboardKey.enter, control: true):
+            _handleRunOrStop,
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
+            _handleOpenFind(expandReplace: false),
+        const SingleActivator(LogicalKeyboardKey.keyH, control: true): () =>
+            _handleOpenFind(expandReplace: true),
+        const SingleActivator(LogicalKeyboardKey.keyG, control: true):
+            _handleGoToLine,
+      },
+      child: Focus(
+        autofocus: true,
+        // A plain Focus with no visual affordance — its only job is to
+        // hold initial focus so keyboard shortcuts work immediately,
+        // before the user has tapped into the editor at all.
+        child: scaffold,
       ),
     );
   }
@@ -262,6 +345,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onToggleWordWrap;
   final VoidCallback onFontSizePressed;
   final VoidCallback? onPreviewUiPressed;
+  final VoidCallback onSettingsPressed;
 
   const _EditorAppBar({
     required this.fileName,
@@ -278,6 +362,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onToggleWordWrap,
     required this.onFontSizePressed,
     required this.onPreviewUiPressed,
+    required this.onSettingsPressed,
   });
 
   @override
@@ -322,10 +407,10 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
         PopupMenuButton<VoidCallback>(
           tooltip: 'More',
-          enabled: onGoToLinePressed != null,
           onSelected: (action) => action(),
           itemBuilder: (context) => [
             PopupMenuItem(
+              enabled: onGoToLinePressed != null,
               value: onGoToLinePressed,
               child: const ListTile(
                 leading: Icon(Icons.arrow_forward_rounded),
@@ -342,10 +427,12 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
               ),
             ),
             PopupMenuItem(
+              enabled: onArgumentsPressed != null,
               value: onArgumentsPressed,
               child: ListTile(
                 leading: const Icon(Icons.terminal_rounded),
-                title: Text(argsCount > 0 ? 'Arguments ($argsCount)' : 'Arguments'),
+                title: Text(
+                    argsCount > 0 ? 'Arguments ($argsCount)' : 'Arguments'),
                 contentPadding: EdgeInsets.zero,
               ),
             ),
@@ -357,10 +444,20 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
             ),
             const PopupMenuDivider(),
             PopupMenuItem(
+              enabled: onPreviewUiPressed != null,
               value: onPreviewUiPressed,
               child: const ListTile(
                 leading: Icon(Icons.visibility_outlined),
                 title: Text('Preview UI'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            const PopupMenuDivider(),
+            PopupMenuItem(
+              value: onSettingsPressed,
+              child: const ListTile(
+                leading: Icon(Icons.settings_outlined),
+                title: Text('Settings'),
                 contentPadding: EdgeInsets.zero,
               ),
             ),
@@ -380,6 +477,7 @@ class _EditorBody extends StatelessWidget {
   final double fontSize;
   final bool wordWrap;
   final bool showFindReplace;
+  final bool findReplaceExpanded;
   final VoidCallback onCloseFindReplace;
 
   const _EditorBody({
@@ -388,6 +486,7 @@ class _EditorBody extends StatelessWidget {
     required this.fontSize,
     required this.wordWrap,
     required this.showFindReplace,
+    required this.findReplaceExpanded,
     required this.onCloseFindReplace,
   });
 
@@ -398,19 +497,12 @@ class _EditorBody extends StatelessWidget {
         const FileTabBar(),
         if (showFindReplace && controller != null)
           FindReplaceBar(
-            // Keyed to the controller so switching files while Find is
-            // open starts a fresh search session instead of showing
-            // match highlights computed against a different file.
             key: ValueKey(controller),
             controller: controller!,
             onClose: onCloseFindReplace,
+            initiallyExpanded: findReplaceExpanded,
           ),
         Expanded(
-          // Deliberately NOT keyed by the active file's path. Re-keying
-          // forced a full remount on every tab switch, which reset the
-          // visible cursor position to the start of the file — see
-          // CodeEditor's doc comment. CodeEditor's own didUpdateWidget
-          // handles the controller swap correctly on its own.
           child: controller != null
               ? CodeEditor(
                   controller: controller!,
@@ -421,7 +513,8 @@ class _EditorBody extends StatelessWidget {
               : const _NoFileOpenPlaceholder(),
         ),
         if (controller != null && undoController != null)
-          CodingToolbar(controller: controller!, undoController: undoController!),
+          CodingToolbar(
+              controller: controller!, undoController: undoController!),
         const ConsolePanel(),
       ],
     );
@@ -439,7 +532,8 @@ class _NoFileOpenPlaceholder extends StatelessWidget {
         child: Text(
           'No file open.\nCreate or pick one from the file tree.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          style:
+              TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       ),
     );
