@@ -4,29 +4,38 @@ import 'package:flutter/material.dart';
 
 import '../models/console_event.dart';
 import '../services/dart_runner_service.dart';
+import '../services/eval_service.dart';
 
 /// Execution state for the currently open file. The Console panel
-/// (Phase 4) reads [events] the same way this provider exposes them —
-/// this provider doesn't change when the console UI changes.
+/// (Phase 4) reads [events] the same way this provider exposes them.
 class RunnerProvider extends ChangeNotifier {
   final DartRunnerService _service;
+  final EvalService evalService;
   final List<ConsoleEvent> _events = [];
   StreamSubscription<ConsoleEvent>? _subscription;
   bool _isRunning = false;
 
-  RunnerProvider({DartRunnerService? service}) : _service = service ?? DartRunnerService();
+  // Keep the last-run source + args so EvalService can re-run it on
+  // the main isolate for post-execution variable inspection (Phase 12).
+  String _lastSource = '';
+  List<String> _lastArgs = const [];
+
+  RunnerProvider({DartRunnerService? service, EvalService? evalService})
+      : _service = service ?? DartRunnerService(),
+        evalService = evalService ?? EvalService();
 
   List<ConsoleEvent> get events => List.unmodifiable(_events);
   bool get isRunning => _isRunning;
 
-  /// [args] become `main`'s `List<String> args` parameter (Section 34)
-  /// — real support, since `tom_d4rt`'s `execute()` takes
-  /// `positionalArgs` directly (verified in Phase 3 before this was
-  /// wired up).
   Future<void> run(String source, {List<String> args = const []}) async {
     await _subscription?.cancel();
     _events.clear();
     _isRunning = true;
+    _lastSource = source;
+    _lastArgs = args;
+    // Clear any session from a previous run so the inspector doesn't
+    // show stale state while the new run is in progress.
+    evalService.clearSession();
     notifyListeners();
 
     _subscription = _service.run(source, args: args).listen(
@@ -34,6 +43,15 @@ class RunnerProvider extends ChangeNotifier {
         _events.add(event);
         if (event.type == ConsoleEventType.exitCode) {
           _isRunning = false;
+          // Only set up an eval session if the script finished cleanly —
+          // a crashed or timed-out script left the environment in an
+          // unknown state so eval results would be misleading.
+          if (event.exitCode == 0) {
+            // Don't await — let the session build in the background.
+            // isSettingUp is available on evalService for UIs that want
+            // to show a spinner while re-execution runs.
+            unawaited(evalService.setupSession(_lastSource, args: _lastArgs));
+          }
         }
         notifyListeners();
       },
@@ -46,9 +64,6 @@ class RunnerProvider extends ChangeNotifier {
 
   void stop() => _service.stop();
 
-  /// Clears the output history (Console's Clear action). Doesn't touch
-  /// a currently-running execution — events from that run will keep
-  /// arriving and simply start the list over.
   void clearEvents() {
     _events.clear();
     notifyListeners();

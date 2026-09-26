@@ -298,11 +298,11 @@ class CodeEditorController extends TextEditingController {
 
       Color? backgroundColor;
       if (isActiveSearchMatch) {
-        backgroundColor = _scheme.operatorColor.withOpacity(0.55);
+        backgroundColor = _scheme.operatorColor.withValues(alpha: 0.55);
       } else if (isSearchMatch) {
-        backgroundColor = _scheme.selection.withOpacity(0.35);
+        backgroundColor = _scheme.selection.withValues(alpha: 0.35);
       } else if (isBracketMatch) {
-        backgroundColor = _scheme.selection.withOpacity(0.55);
+        backgroundColor = _scheme.selection.withValues(alpha: 0.55);
       }
 
       children.add(TextSpan(

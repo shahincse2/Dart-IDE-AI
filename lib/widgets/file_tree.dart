@@ -193,7 +193,7 @@ class _EntryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: selected ? scheme.primaryContainer.withOpacity(0.4) : Colors.transparent,
+      color: selected ? scheme.primaryContainer.withValues(alpha: 0.4) : Colors.transparent,
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,

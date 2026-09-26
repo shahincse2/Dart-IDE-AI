@@ -19,6 +19,7 @@ import '../widgets/file_tree.dart';
 import '../widgets/find_replace_bar.dart';
 import '../widgets/font_size_dialog.dart';
 import '../widgets/go_to_line_dialog.dart';
+import '../widgets/variable_inspector_panel.dart';
 import 'settings_screen.dart';
 import 'ui_preview_screen.dart';
 
@@ -104,8 +105,7 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _syncControllers() async {
     final openTabs = _fileProvider.openTabs;
 
-    final toRemove =
-        _controllers.keys.where((path) => !openTabs.contains(path)).toList();
+    final toRemove = _controllers.keys.where((path) => !openTabs.contains(path)).toList();
     for (final path in toRemove) {
       _controllers.remove(path)?.dispose();
       _undoControllers.remove(path)?.dispose();
@@ -113,8 +113,7 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     for (final path in openTabs) {
-      if (_controllers.containsKey(path) || _loadingPaths.contains(path))
-        continue;
+      if (_controllers.containsKey(path) || _loadingPaths.contains(path)) continue;
       _loadingPaths.add(path);
 
       final settings = context.read<SettingsProvider>();
@@ -137,8 +136,7 @@ class _EditorScreenState extends State<EditorScreen> {
         text: content,
         selection: const TextSelection.collapsed(offset: 0),
       );
-      controller.addListener(
-          () => _fileProvider.scheduleAutoSave(path, controller.text));
+      controller.addListener(() => _fileProvider.scheduleAutoSave(path, controller.text));
 
       _controllers[path] = controller;
       _undoControllers[path] = UndoHistoryController();
@@ -167,8 +165,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _handleRunOrStop() {
     final activePath = _fileProvider.activeTab;
-    final activeController =
-        activePath != null ? _controllers[activePath] : null;
+    final activeController = activePath != null ? _controllers[activePath] : null;
     if (activeController == null) return;
     if (_runnerProvider.isRunning) {
       _runnerProvider.stop();
@@ -176,15 +173,13 @@ class _EditorScreenState extends State<EditorScreen> {
       activeController.setErrorLine(null);
       _lastRunPath = activePath;
       _lastSeenRunnerEventCount = 0;
-      _runnerProvider.run(activeController.text,
-          args: _argsByPath[activePath] ?? const []);
+      _runnerProvider.run(activeController.text, args: _argsByPath[activePath] ?? const []);
     }
   }
 
   void _handleSave() {
     final activePath = _fileProvider.activeTab;
-    final activeController =
-        activePath != null ? _controllers[activePath] : null;
+    final activeController = activePath != null ? _controllers[activePath] : null;
     if (activeController == null || activePath == null) return;
     _fileProvider.saveNow(activePath, activeController.text);
   }
@@ -203,10 +198,18 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _handleGoToLine() {
     final activePath = _fileProvider.activeTab;
-    final activeController =
-        activePath != null ? _controllers[activePath] : null;
+    final activeController = activePath != null ? _controllers[activePath] : null;
     if (activeController == null) return;
     showGoToLineDialog(context, activeController);
+  }
+
+  void _handleInspect() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const VariableInspectorPanel(),
+    );
   }
 
   @override
@@ -224,10 +227,8 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     final activePath = fileProvider.activeTab;
-    final activeController =
-        activePath != null ? _controllers[activePath] : null;
-    final activeUndoController =
-        activePath != null ? _undoControllers[activePath] : null;
+    final activeController = activePath != null ? _controllers[activePath] : null;
+    final activeUndoController = activePath != null ? _undoControllers[activePath] : null;
 
     final isTablet = AppConstants.isTablet(context);
     final isLandscape = AppConstants.isLandscape(context);
@@ -266,23 +267,21 @@ class _EditorScreenState extends State<EditorScreen> {
             ? () async {
                 final current = _argsByPath[activePath]?.join(' ') ?? '';
                 final result = await showArgumentsDialog(context, current);
-                if (result != null)
-                  setState(() => _argsByPath[activePath!] = result);
+                if (result != null) setState(() => _argsByPath[activePath!] = result);
               }
             : null,
-        argsCount:
-            activePath != null ? (_argsByPath[activePath]?.length ?? 0) : 0,
+        argsCount: activePath != null ? (_argsByPath[activePath]?.length ?? 0) : 0,
         wordWrap: settings.wordWrap,
         onToggleWordWrap: () => settings.setWordWrap(!settings.wordWrap),
         onFontSizePressed: () => showFontSizeDialog(context, settings),
         onPreviewUiPressed: activeController != null
             ? () => Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) =>
-                        UiPreviewScreen(source: activeController.text),
+                    builder: (_) => UiPreviewScreen(source: activeController.text),
                   ),
                 )
             : null,
+        onInspectPressed: _handleInspect,
         onSettingsPressed: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const SettingsScreen()),
         ),
@@ -308,16 +307,13 @@ class _EditorScreenState extends State<EditorScreen> {
     // redundant at best and could double-fire at worst.
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyS, control: true):
-            _handleSave,
-        const SingleActivator(LogicalKeyboardKey.enter, control: true):
-            _handleRunOrStop,
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true): _handleSave,
+        const SingleActivator(LogicalKeyboardKey.enter, control: true): _handleRunOrStop,
         const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
             _handleOpenFind(expandReplace: false),
         const SingleActivator(LogicalKeyboardKey.keyH, control: true): () =>
             _handleOpenFind(expandReplace: true),
-        const SingleActivator(LogicalKeyboardKey.keyG, control: true):
-            _handleGoToLine,
+        const SingleActivator(LogicalKeyboardKey.keyG, control: true): _handleGoToLine,
       },
       child: Focus(
         autofocus: true,
@@ -345,6 +341,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onToggleWordWrap;
   final VoidCallback onFontSizePressed;
   final VoidCallback? onPreviewUiPressed;
+  final VoidCallback onInspectPressed;
   final VoidCallback onSettingsPressed;
 
   const _EditorAppBar({
@@ -362,6 +359,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onToggleWordWrap,
     required this.onFontSizePressed,
     required this.onPreviewUiPressed,
+    required this.onInspectPressed,
     required this.onSettingsPressed,
   });
 
@@ -431,8 +429,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
               value: onArgumentsPressed,
               child: ListTile(
                 leading: const Icon(Icons.terminal_rounded),
-                title: Text(
-                    argsCount > 0 ? 'Arguments ($argsCount)' : 'Arguments'),
+                title: Text(argsCount > 0 ? 'Arguments ($argsCount)' : 'Arguments'),
                 contentPadding: EdgeInsets.zero,
               ),
             ),
@@ -449,6 +446,14 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
               child: const ListTile(
                 leading: Icon(Icons.visibility_outlined),
                 title: Text('Preview UI'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            PopupMenuItem(
+              value: onInspectPressed,
+              child: const ListTile(
+                leading: Icon(Icons.manage_search_rounded),
+                title: Text('Inspect variables'),
                 contentPadding: EdgeInsets.zero,
               ),
             ),
@@ -513,8 +518,7 @@ class _EditorBody extends StatelessWidget {
               : const _NoFileOpenPlaceholder(),
         ),
         if (controller != null && undoController != null)
-          CodingToolbar(
-              controller: controller!, undoController: undoController!),
+          CodingToolbar(controller: controller!, undoController: undoController!),
         const ConsolePanel(),
       ],
     );
@@ -532,8 +536,7 @@ class _NoFileOpenPlaceholder extends StatelessWidget {
         child: Text(
           'No file open.\nCreate or pick one from the file tree.',
           textAlign: TextAlign.center,
-          style:
-              TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       ),
     );

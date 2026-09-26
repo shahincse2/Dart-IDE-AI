@@ -39,7 +39,7 @@ class ConsolePanel extends StatelessWidget {
       height: console.isOpen ? console.height.clamp(AppConstants.consoleMinOpenHeight, maxHeight) : 0,
       decoration: BoxDecoration(
         color: scheme.gutterBackground,
-        border: Border(top: BorderSide(color: scheme.gutterText.withOpacity(0.2), width: 0.5)),
+        border: Border(top: BorderSide(color: scheme.gutterText.withValues(alpha: 0.2), width: 0.5)),
       ),
       clipBehavior: Clip.hardEdge,
       child: console.isOpen
@@ -69,7 +69,7 @@ class _ConsoleContent extends StatelessWidget {
       children: [
         _DragHandle(console: console, maxHeight: maxHeight),
         _Header(console: console, runner: runner, scheme: scheme),
-        Divider(height: 0.5, color: scheme.gutterText.withOpacity(0.15)),
+        Divider(height: 0.5, color: scheme.gutterText.withValues(alpha: 0.15)),
         Expanded(child: _OutputList(runner: runner, scheme: scheme)),
       ],
     );
@@ -96,7 +96,7 @@ class _DragHandle extends StatelessWidget {
             width: 36,
             height: 4,
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.4),
+              color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -130,7 +130,7 @@ class _Header extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: scheme.selection.withOpacity(0.5),
+                color: scheme.selection.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text('Running', style: TextStyle(color: scheme.text, fontSize: 11)),

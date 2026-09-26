@@ -84,7 +84,7 @@ class CodingToolbar extends StatelessWidget {
                   // disabled dimming — the button worked correctly but
                   // never looked different when there was nothing to
                   // undo. Deriving the color from `canUndo` fixes that.
-                  color: value.canUndo ? scheme.text : scheme.gutterText.withOpacity(0.4),
+                  color: value.canUndo ? scheme.text : scheme.gutterText.withValues(alpha: 0.4),
                 ),
                 onPressed: value.canUndo ? undoController.undo : null,
               ),
@@ -96,7 +96,7 @@ class CodingToolbar extends StatelessWidget {
                 iconSize: 18,
                 icon: Icon(
                   Icons.redo_rounded,
-                  color: value.canRedo ? scheme.text : scheme.gutterText.withOpacity(0.4),
+                  color: value.canRedo ? scheme.text : scheme.gutterText.withValues(alpha: 0.4),
                 ),
                 onPressed: value.canRedo ? undoController.redo : null,
               ),
@@ -105,7 +105,7 @@ class CodingToolbar extends StatelessWidget {
               width: 0.5,
               height: 24,
               margin: const EdgeInsets.symmetric(horizontal: AppConstants.spaceXs),
-              color: scheme.gutterText.withOpacity(0.2),
+              color: scheme.gutterText.withValues(alpha: 0.2),
             ),
             Expanded(
               child: ListView.separated(

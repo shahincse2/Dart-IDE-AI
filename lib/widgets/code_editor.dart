@@ -194,7 +194,7 @@ class _CodeEditorState extends State<CodeEditor> {
             scrollOffset: scrollOffset,
             viewportHeight: viewportHeight,
           ),
-          Container(width: 0.5, color: scheme.gutterText.withOpacity(0.15)),
+          Container(width: 0.5, color: scheme.gutterText.withValues(alpha: 0.15)),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -386,7 +386,7 @@ class _ErrorLineHighlight extends StatelessWidget {
       right: 0,
       height: lineHeight,
       child: IgnorePointer(
-        child: ColoredBox(color: const Color(0xFFE06C75).withOpacity(0.18)),
+        child: ColoredBox(color: const Color(0xFFE06C75).withValues(alpha: 0.18)),
       ),
     );
   }
