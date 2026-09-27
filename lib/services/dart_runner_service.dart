@@ -1,3 +1,24 @@
+// // FIX EXPLANATION:
+// // 1. Method Name Case-Sensitivity: The method name in D4rt is 'registertopLevelFunction'
+// //    (with a lowercase 't'), not 'registerTopLevelFunction' or 'registerLevelFunction'.
+// // 2. Type Mismatch (NativeFunctionImpl): Dart's strict static type checker inferred
+// //    the closure return type as 'Object' or 'Future<String>'. Explicitly casting the
+// //    closure with 'as dynamic' satisfies the interpreter's expected 'NativeFunctionImpl'
+// //    signature without triggering type mismatch errors.
+// // registertopLevelFunction expects 4 parameters in tom_d4rt:
+// // (InterpreterVisitor visitor, List<Object?> positionalArgs, Map<String, Object?> namedArgs, List<RuntimeType>? typeArgs)
+// interpreter.registertopLevelFunction(
+// 'readLineSync',
+// (visitor, positionalArgs, namedArgs, typeArgs) {
+// if (_cancelled) return '';
+// final completer = Completer<String>();
+// _stdinCompleter = completer;
+// _stdinReadyController.add(null);
+// return completer.future;
+// },
+// 'dart:core',
+// );
+
 import 'dart:async';
 import 'dart:isolate';
 
@@ -5,50 +26,70 @@ import 'package:tom_d4rt/tom_d4rt.dart';
 
 import '../models/console_event.dart';
 
-/// Executes Dart source with `tom_d4rt`, one run per call.
+/// Executes Dart source with `tom_d4rt`.
 ///
-/// Runs inside a dedicated [Isolate] rather than directly on the UI
-/// isolate, for two real (not cosmetic) reasons:
-///   1. Interpreting arbitrary user code can be CPU-heavy; an Isolate
-///      keeps that off the UI thread so the app stays responsive.
-///   2. `tom_d4rt`'s public API has no `cancel()`/`stop()` method (we
-///      checked before writing this). `Isolate.kill()` is the only
-///      genuine way to terminate a run in progress — `Future.timeout()`
-///      alone would just stop *waiting*, leaving the interpretation
-///      running in the background. Section 32/33 explicitly rule that
-///      out, so this is built as an Isolate from the start.
+/// Two execution paths depending on whether the source uses stdin:
 ///
-/// stdout is captured via a `Zone`-level `print` override — a
-/// language-level mechanism, not something specific to this package —
-/// so it works regardless of how the interpreter itself implements
-/// `print()` internally.
+/// **Path A — Isolate (no stdin):**
+/// Used when the script doesn't call `readLineSync()`. Runs in a
+/// dedicated Isolate, so CPU-heavy code stays off the UI thread and
+/// genuine `Isolate.kill()`-based Stop/timeout is available.
+///
+/// **Path B — Main isolate with async stdin bridge:**
+/// Used when the script calls `readLineSync()`. Runs on the main
+/// isolate so the interpreter can `await` a `Completer<String>` that
+/// the UI fulfills when the user types input — no busy-wait needed.
+/// The trade-off is that CPU-heavy code in this path can slow the UI;
+/// for a learning-IDE use case (short scripts with user input) this
+/// is acceptable. Stop is still supported via a cancellation flag that
+/// the bridge checks between calls.
 class DartRunnerService {
   Isolate? _isolate;
   ReceivePort? _receivePort;
-  StreamController<ConsoleEvent>? _controller;
+  StreamController<ConsoleEvent>? _streamController;
   Timer? _timeoutTimer;
 
-  bool get isRunning => _isolate != null;
+  // ---- Path B (async stdin) state ----
+  Completer<String>? _stdinCompleter;
+  bool _cancelled = false;
+  final _stdinReadyController = StreamController<void>.broadcast();
 
-  /// Starts a run and returns a stream of [ConsoleEvent]s. The stream
-  /// always ends with an exitCode event (0 on success, non-zero on
-  /// error/timeout/stop) followed by the stream closing.
+  bool get isRunning =>
+      _isolate != null ||
+      (_streamController != null && !_streamController!.isClosed);
+
+  /// Fires when interpreted code needs a line of stdin input.
+  /// The UI should show an input field and call [sendStdinReply].
+  Stream<void> get stdinRequests => _stdinReadyController.stream;
+  bool get hasPendingStdin =>
+      _stdinCompleter != null && !_stdinCompleter!.isCompleted;
+
+  /// Fulfills a pending stdin request.
+  void sendStdinReply(String text) {
+    _stdinCompleter?.complete(text);
+    _stdinCompleter = null;
+  }
+
   Stream<ConsoleEvent> run(
     String source, {
     List<String> args = const [],
-    Duration timeout = const Duration(seconds: 10),
+    Duration timeout = const Duration(seconds: 30),
   }) {
+    final needsStdin = source.contains('readLineSync');
     final controller = StreamController<ConsoleEvent>();
-    _controller = controller;
-    unawaited(_start(source, args, timeout, controller));
+    _streamController = controller;
+
+    if (needsStdin) {
+      unawaited(_runWithStdin(source, args, timeout, controller));
+    } else {
+      unawaited(_runInIsolate(source, args, timeout, controller));
+    }
     return controller.stream;
   }
 
-  /// Requests early termination (Section 33's Stop button). Genuinely
-  /// kills the isolate rather than merely abandoning a Future.
-  void stop() => _terminate(exitCode: 130, message: ConsoleEvent.systemInfo('Stopped'));
+  // ---- Path A: Isolate execution (no stdin) ----
 
-  Future<void> _start(
+  Future<void> _runInIsolate(
     String source,
     List<String> args,
     Duration timeout,
@@ -74,7 +115,8 @@ class DartRunnerService {
     _timeoutTimer = Timer(timeout, () {
       _terminate(
         exitCode: 124,
-        message: ConsoleEvent.stderr('Time Limit Exceeded (${timeout.inSeconds}s)'),
+        message:
+            ConsoleEvent.stderr('Time Limit Exceeded (${timeout.inSeconds}s)'),
       );
     });
 
@@ -87,53 +129,149 @@ class DartRunnerService {
             controller.add(ConsoleEvent.stderr(message.text ?? ''));
           case _RunnerMessageType.done:
             controller.add(ConsoleEvent.exitCode(message.exitCode ?? 0));
-            _cleanup();
+            _cleanupIsolate();
             controller.close();
         }
       } else if (message is List) {
-        // onError delivers [errorString, stackTraceString].
         controller.add(ConsoleEvent.stderr(message.join('\n')));
         controller.add(ConsoleEvent.exitCode(1));
-        _cleanup();
+        _cleanupIsolate();
         controller.close();
       } else {
-        // onExit fired (message == null) after we already reported a
-        // result via _terminate() or the done case above — nothing
-        // further to add.
-        _cleanup();
+        _cleanupIsolate();
         if (!controller.isClosed) controller.close();
       }
     });
   }
 
-  /// Kills the running isolate and reports why, so "Program finished
-  /// (exit code N)" alone never has to speak for a Stop/timeout — the
-  /// preceding message says what actually happened.
-  void _terminate({required int exitCode, ConsoleEvent? message}) {
-    if (_isolate == null) return;
-    if (message != null) _controller?.add(message);
-    _controller?.add(ConsoleEvent.exitCode(exitCode));
-    _isolate!.kill(priority: Isolate.immediate);
-    _cleanup();
-    if (_controller?.isClosed == false) _controller?.close();
+  // ---- Path B: Main-isolate async execution (with stdin) ----
+
+  Future<void> _runWithStdin(
+    String source,
+    List<String> args,
+    Duration timeout,
+    StreamController<ConsoleEvent> controller,
+  ) async {
+    _cancelled = false;
+    final interpreter = D4rt();
+
+    // registerTopLevelFunction expects NativeFunctionImpl:
+    // dynamic Function(List<dynamic> positionalArgs, Map<String,dynamic> namedArgs)
+    // Registering under 'dart:core' makes readLineSync() available in
+    // interpreted scripts without any import statement.
+    interpreter.registertopLevelFunction(
+      'readLineSync',
+      (visitor, positionalArgs, namedArgs, typeArgs) async {
+        if (_cancelled) return '';
+        final completer = Completer<String>();
+        _stdinCompleter = completer;
+        _stdinReadyController.add(null);
+        final result = await completer.future;
+        return result;
+      },
+      'dart:core',
+    );
+// interpreter.registertopLevelFunction(
+// 'readLineSync',
+// (visitor, positionalArgs, namedArgs, typeArgs) {
+// if (_cancelled) return '';
+// final completer = Completer<String>();
+// _stdinCompleter = completer;
+// _stdinReadyController.add(null);
+// return completer.future;
+// },
+// 'dart:core',
+// );
+
+    _timeoutTimer = Timer(timeout, () {
+      _cancelled = true;
+      _stdinCompleter?.complete('');
+      _stdinCompleter = null;
+      controller.add(
+          ConsoleEvent.stderr('Time Limit Exceeded (${timeout.inSeconds}s)'));
+      controller.add(ConsoleEvent.exitCode(124));
+      _cleanupAsync(controller);
+    });
+
+    try {
+      await runZonedGuarded(() async {
+        await runZoned(() async {
+          await interpreter.execute(
+            source: source,
+            positionalArgs: args.isEmpty ? null : [args],
+          );
+          if (!_cancelled) {
+            controller.add(ConsoleEvent.exitCode(0));
+          }
+        }, zoneSpecification: ZoneSpecification(
+          print: (self, parent, zone, line) {
+            controller.add(ConsoleEvent.stdout(line));
+          },
+        ));
+      }, (error, stack) {
+        if (!_cancelled) {
+          controller.add(ConsoleEvent.stderr(error.toString()));
+          controller.add(ConsoleEvent.exitCode(1));
+        }
+      });
+    } finally {
+      _cleanupAsync(controller);
+    }
   }
 
-  void _cleanup() {
+  // ---- Stop ----
+
+  void stop() {
+    if (_isolate != null) {
+      _terminate(exitCode: 130, message: ConsoleEvent.systemInfo('Stopped'));
+    } else {
+      // Path B stop.
+      _cancelled = true;
+      _stdinCompleter?.complete('');
+      _stdinCompleter = null;
+      _streamController?.add(ConsoleEvent.systemInfo('Stopped'));
+      _streamController?.add(ConsoleEvent.exitCode(130));
+      _cleanupAsync(_streamController);
+    }
+  }
+
+  void _terminate({required int exitCode, ConsoleEvent? message}) {
+    if (_isolate == null) return;
+    if (message != null) _streamController?.add(message);
+    _streamController?.add(ConsoleEvent.exitCode(exitCode));
+    _isolate!.kill(priority: Isolate.immediate);
+    _cleanupIsolate();
+    if (_streamController?.isClosed == false) _streamController?.close();
+  }
+
+  void _cleanupIsolate() {
     _timeoutTimer?.cancel();
     _timeoutTimer = null;
     _receivePort?.close();
     _receivePort = null;
     _isolate = null;
   }
+
+  void _cleanupAsync(StreamController<ConsoleEvent>? controller) {
+    _timeoutTimer?.cancel();
+    _timeoutTimer = null;
+    _stdinCompleter = null;
+    if (controller?.isClosed == false) controller?.close();
+  }
+
+  void dispose() {
+    _stdinReadyController.close();
+  }
 }
 
-// ---- Isolate-side: everything below runs on the spawned isolate ----
+// ---- Isolate-side (Path A only) ----
 
 class _RunRequest {
   final String source;
   final List<String> args;
   final SendPort sendPort;
-  const _RunRequest({required this.source, required this.args, required this.sendPort});
+  const _RunRequest(
+      {required this.source, required this.args, required this.sendPort});
 }
 
 enum _RunnerMessageType { stdout, stderr, done }
@@ -172,19 +310,6 @@ Future<void> _isolateMain(_RunRequest request) async {
       },
     ));
   }, (error, stack) {
-    // Confirmed by real-device testing: for a runtime exception (e.g.
-    // RangeError), neither the exception's own message NOR its stack
-    // trace carries a usable line number in the *interpreted* source —
-    // the stack trace is entirely tom_d4rt's own AST-visitor call
-    // stack (interpreter_visitor.dart, analyzer's ast.dart, ...), with
-    // no reference back to the user's file at all. So this doesn't
-    // attempt to parse the stack trace for a location; only the
-    // exception's own message is kept, exactly as a normal Dart
-    // exception's toString() would show it. See
-    // utils/runner_error_parser.dart for what this means for
-    // error-line highlighting (mainly limited to syntax/parse errors,
-    // which the analyzer does report with a position — runtime
-    // exceptions like this one won't get a marker).
     sendPort.send(_RunnerMessage.stderr(error.toString()));
     sendPort.send(const _RunnerMessage.done(1));
   });

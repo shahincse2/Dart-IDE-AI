@@ -83,7 +83,7 @@ class _VariableInspectorPanelState extends State<VariableInspectorPanel> {
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(
-                  AppConstants.spaceMd, 0, AppConstants.spaceMd, AppConstants.spaceSm),
+                    AppConstants.spaceMd, 0, AppConstants.spaceMd, AppConstants.spaceSm),
                 child: Row(
                   children: [
                     const Icon(Icons.manage_search_rounded, size: 18),
@@ -167,13 +167,13 @@ class _VariableInspectorPanelState extends State<VariableInspectorPanel> {
         if (varNames.isNotEmpty) ...[
           _SectionLabel('Top-level variables'),
           ...varNames.map((name) => _VariableRow(
-                name: name,
-                evalService: runner.evalService,
-                onTap: () {
-                  _expressionController.text = name;
-                  _expressionFocusNode.requestFocus();
-                },
-              )),
+            name: name,
+            evalService: runner.evalService,
+            onTap: () {
+              _expressionController.text = name;
+              _expressionFocusNode.requestFocus();
+            },
+          )),
           Divider(height: 0.5, color: scheme.outlineVariant),
         ],
         _SectionLabel('Evaluate expression'),
@@ -204,15 +204,15 @@ class _NoSessionBanner extends StatelessWidget {
           const SizedBox(height: AppConstants.spaceSm),
           const Text(
             'Run your code first.\n'
-            'The inspector becomes available after a successful run (exit code 0).',
+                'The inspector becomes available after a successful run (exit code 0).',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13),
           ),
           const SizedBox(height: AppConstants.spaceSm),
           Text(
             'Note: only top-level variables are accessible — '
-            'local variables inside functions are not inspectable after '
-            'the run finishes.',
+                'local variables inside functions are not inspectable after '
+                'the run finishes.',
             textAlign: TextAlign.center,
             style: TextStyle(
                 fontSize: 12,
@@ -290,15 +290,15 @@ class _VariableRowState extends State<_VariableRow> {
       subtitle: _value == null
           ? null
           : Text(
-              _value!,
-              style: TextStyle(
-                fontFamily: editorFontFamily,
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+        _value!,
+        style: TextStyle(
+          fontFamily: editorFontFamily,
+          fontSize: 12,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       onTap: widget.onTap,
     );
   }
