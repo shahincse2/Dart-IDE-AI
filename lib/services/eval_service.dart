@@ -30,6 +30,7 @@ class EvalService {
   bool _isSettingUp = false;
 
   bool get hasSession => _hasSession;
+
   bool get isSettingUp => _isSettingUp;
 
   /// Re-runs [source] on a fresh main-isolate D4rt instance so its
@@ -37,28 +38,78 @@ class EvalService {
   /// silently suppressed — this is a background context-build, not a
   /// second visible execution. Call this after the worker isolate's run
   /// finishes successfully (i.e. exit code 0).
-  Future<void> setupSession(String source, {List<String> args = const []}) async {
+  // Future<void> setupSession(String source, {List<String> args = const []}) async {
+  //   _hasSession = false;
+  //   _isSettingUp = true;
+  //   final interpreter = D4rt();
+  //   try {
+  //     await runZoned(() async {
+  //       await interpreter.execute(
+  //         source: wrappedSource,
+  //         positionalArgs: args.isEmpty ? null : [args],
+  //       );
+  //     }, zoneSpecification: ZoneSpecification(
+  //       // Suppress print() so re-running the script doesn't produce
+  //       // duplicate console output.
+  //       print: (self, parent, zone, line) {},
+  //     ));
+  //     _interpreter = interpreter;
+  //     _hasSession = true;
+  //   } catch (_) {
+  //     // If re-execution fails (shouldn't happen — we only set up after
+  //     // a confirmed successful run — but network/FS state might differ),
+  //     // just leave the session unavailable rather than surfacing an
+  //     // error for a background task the user didn't ask for.
+  //     _hasSession = false;
+  //   } finally {
+  //     _isSettingUp = false;
+  //   }
+  // }
+
+  /// Re-runs [source] on a fresh main-isolate D4rt instance so its
+  /// post-execution environment is available for eval(). Output is
+  /// silently suppressed — this is a background context-build, not a
+  /// second visible execution. Call this after the worker isolate's run
+  /// finishes successfully (i.e. exit code 0).
+  Future<void> setupSession(String source,
+      {List<String> args = const []}) async {
     _hasSession = false;
     _isSettingUp = true;
     final interpreter = D4rt();
+
+    final needsStdin = source.contains('readLineSync');
+
+    if (needsStdin) {
+      interpreter.registerGlobalGetter(
+        '__stdin__',
+        () async => '', // Background re-execution won't block on stdin
+        'dart:core',
+      );
+    }
+
+    final String wrappedSource = needsStdin
+        ? '''
+Future<String?> readLineSync() async => await __stdin__;
+
+$source'''
+        : source;
+
     try {
       await runZoned(() async {
         await interpreter.execute(
-          source: source,
+          source: wrappedSource,
           positionalArgs: args.isEmpty ? null : [args],
         );
-      }, zoneSpecification: ZoneSpecification(
-        // Suppress print() so re-running the script doesn't produce
-        // duplicate console output.
-        print: (self, parent, zone, line) {},
-      ));
+      },
+          zoneSpecification: ZoneSpecification(
+            // Suppress print() so re-running the script doesn't produce
+            // duplicate console output.
+            print: (self, parent, zone, line) {},
+          ));
       _interpreter = interpreter;
       _hasSession = true;
     } catch (_) {
-      // If re-execution fails (shouldn't happen — we only set up after
-      // a confirmed successful run — but network/FS state might differ),
-      // just leave the session unavailable rather than surfacing an
-      // error for a background task the user didn't ask for.
+      // If re-execution fails, leave the session unavailable.
       _hasSession = false;
     } finally {
       _isSettingUp = false;

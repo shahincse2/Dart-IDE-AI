@@ -61,6 +61,7 @@ class DartRunnerService {
   /// Fires when interpreted code needs a line of stdin input.
   /// The UI should show an input field and call [sendStdinReply].
   Stream<void> get stdinRequests => _stdinReadyController.stream;
+
   bool get hasPendingStdin =>
       _stdinCompleter != null && !_stdinCompleter!.isCompleted;
 
@@ -73,7 +74,7 @@ class DartRunnerService {
   Stream<ConsoleEvent> run(
     String source, {
     List<String> args = const [],
-    Duration timeout = const Duration(seconds: 30),
+    Duration timeout = const Duration(seconds: 60),
   }) {
     final needsStdin = source.contains('readLineSync');
     final controller = StreamController<ConsoleEvent>();
@@ -146,6 +147,73 @@ class DartRunnerService {
 
   // ---- Path B: Main-isolate async execution (with stdin) ----
 
+  // Future<void> _runWithStdin(
+  //   String source,
+  //   List<String> args,
+  //   Duration timeout,
+  //   StreamController<ConsoleEvent> controller,
+  // ) async {
+  //   _cancelled = false;
+  //   final interpreter = D4rt();
+  //
+  //   // registerTopLevelFunction expects NativeFunctionImpl:
+  //   // dynamic Function(List<dynamic> positionalArgs, Map<String,dynamic> namedArgs)
+  //   // Registering under 'dart:core' makes readLineSync() available in
+  //   // registerGlobalGetter puts a value in the global scope without
+  //   // requiring any import statement in the script — exactly what we
+  //   // need for readLineSync() to work as a bare call.
+  //   interpreter.registerGlobalGetter(
+  //     'readLineSync',
+  //         () => (NativeFunctionImpl)(
+  //           (visitor, positionalArgs, namedArgs, typeArgs) async {
+  //         if (_cancelled) return '';
+  //         final completer = Completer<String>();
+  //         _stdinCompleter = completer;
+  //         _stdinReadyController.add(null);
+  //         return completer.future;
+  //       },
+  //     ),
+  //     'dart:core',
+  //   );
+  //
+  //   _timeoutTimer = Timer(timeout, () {
+  //     _cancelled = true;
+  //     _stdinCompleter?.complete('');
+  //     _stdinCompleter = null;
+  //     controller.add(
+  //         ConsoleEvent.stderr('Time Limit Exceeded (${timeout.inSeconds}s)'));
+  //     controller.add(ConsoleEvent.exitCode(124));
+  //     _cleanupAsync(controller);
+  //   });
+  //
+  //   try {
+  //     await runZonedGuarded(() async {
+  //       await runZoned(() async {
+  //         await interpreter.execute(
+  //           source: source,
+  //           positionalArgs: args.isEmpty ? null : [args],
+  //         );
+  //         if (!_cancelled) {
+  //           controller.add(ConsoleEvent.exitCode(0));
+  //         }
+  //       }, zoneSpecification: ZoneSpecification(
+  //         print: (self, parent, zone, line) {
+  //           controller.add(ConsoleEvent.stdout(line));
+  //         },
+  //       ));
+  //     }, (error, stack) {
+  //       if (!_cancelled) {
+  //         controller.add(ConsoleEvent.stderr(error.toString()));
+  //         controller.add(ConsoleEvent.exitCode(1));
+  //       }
+  //     });
+  //   } finally {
+  //     _cleanupAsync(controller);
+  //   }
+  // }
+
+  //==================================================================================================
+
   Future<void> _runWithStdin(
     String source,
     List<String> args,
@@ -153,71 +221,113 @@ class DartRunnerService {
     StreamController<ConsoleEvent> controller,
   ) async {
     _cancelled = false;
+
     final interpreter = D4rt();
 
-    // registerTopLevelFunction expects NativeFunctionImpl:
-    // dynamic Function(List<dynamic> positionalArgs, Map<String,dynamic> namedArgs)
-    // Registering under 'dart:core' makes readLineSync() available in
-    // interpreted scripts without any import statement.
+    // Register readLineSync() in a dedicated virtual DartLab library.
+    //
+    // The source will automatically import this library before execution.
     interpreter.registertopLevelFunction(
       'readLineSync',
       (visitor, positionalArgs, namedArgs, typeArgs) async {
-        if (_cancelled) return '';
+        if (_cancelled) {
+          return '';
+        }
+
         final completer = Completer<String>();
         _stdinCompleter = completer;
+
+        // Notify RunnerProvider/UI that the program is waiting
+        // for user input.
         _stdinReadyController.add(null);
-        final result = await completer.future;
-        return result;
+
+        try {
+          return await completer.future;
+        } finally {
+          if (identical(_stdinCompleter, completer)) {
+            _stdinCompleter = null;
+          }
+        }
       },
-      'dart:core',
+      'package:dartlab/stdin.dart',
     );
-// interpreter.registertopLevelFunction(
-// 'readLineSync',
-// (visitor, positionalArgs, namedArgs, typeArgs) {
-// if (_cancelled) return '';
-// final completer = Completer<String>();
-// _stdinCompleter = completer;
-// _stdinReadyController.add(null);
-// return completer.future;
-// },
-// 'dart:core',
-// );
 
     _timeoutTimer = Timer(timeout, () {
+      if (_cancelled) return;
+
       _cancelled = true;
+
       _stdinCompleter?.complete('');
       _stdinCompleter = null;
+
       controller.add(
-          ConsoleEvent.stderr('Time Limit Exceeded (${timeout.inSeconds}s)'));
-      controller.add(ConsoleEvent.exitCode(124));
+        ConsoleEvent.stderr(
+          'Time Limit Exceeded (${timeout.inSeconds}s)',
+        ),
+      );
+
+      controller.add(
+        ConsoleEvent.exitCode(124),
+      );
+
       _cleanupAsync(controller);
     });
 
+    // Make the registered stdin function available to the user's script.
+    final wrappedSource = '''
+import 'package:dartlab/stdin.dart';
+
+$source
+''';
+
     try {
       await runZonedGuarded(() async {
-        await runZoned(() async {
-          await interpreter.execute(
-            source: source,
-            positionalArgs: args.isEmpty ? null : [args],
-          );
-          if (!_cancelled) {
-            controller.add(ConsoleEvent.exitCode(0));
-          }
-        }, zoneSpecification: ZoneSpecification(
-          print: (self, parent, zone, line) {
-            controller.add(ConsoleEvent.stdout(line));
+        await runZoned(
+          () async {
+            await interpreter.execute(
+              source: wrappedSource,
+              positionalArgs: args.isEmpty ? null : [args],
+            );
+
+            if (!_cancelled) {
+              controller.add(
+                ConsoleEvent.exitCode(0),
+              );
+            }
           },
-        ));
+          zoneSpecification: ZoneSpecification(
+            print: (self, parent, zone, line) {
+              controller.add(
+                ConsoleEvent.stdout(line),
+              );
+            },
+          ),
+        );
       }, (error, stack) {
         if (!_cancelled) {
-          controller.add(ConsoleEvent.stderr(error.toString()));
-          controller.add(ConsoleEvent.exitCode(1));
+          _timeoutTimer?.cancel();
+          _timeoutTimer = null;
+
+          _stdinCompleter?.complete('');
+          _stdinCompleter = null;
+
+          controller.add(
+            ConsoleEvent.stderr(
+              error.toString(),
+            ),
+          );
+
+          controller.add(
+            ConsoleEvent.exitCode(1),
+          );
         }
       });
     } finally {
       _cleanupAsync(controller);
     }
   }
+
+  //==================================================================================================
 
   // ---- Stop ----
 
@@ -270,6 +380,7 @@ class _RunRequest {
   final String source;
   final List<String> args;
   final SendPort sendPort;
+
   const _RunRequest(
       {required this.source, required this.args, required this.sendPort});
 }

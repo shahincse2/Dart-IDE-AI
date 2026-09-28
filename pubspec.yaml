@@ -23,7 +23,7 @@ dependencies:
 
   # Dart execution engine (Phase 3). Runs inside a dedicated Isolate —
   # see services/dart_runner_service.dart for why.
-  tom_d4rt: ^1.29.0
+  tom_d4rt: ^1.77.0
 
   # UI Run mode (Phase 9): interprets a Dart script's top-level
   # `Widget build(BuildContext)` into a real, live Flutter widget tree.
