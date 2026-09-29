@@ -91,8 +91,9 @@ class CodeEditorController extends TextEditingController {
     // any other kind of edit it returns newValue untouched (same
     // reference), so `identical` reliably tells us whether to also
     // try auto-pairing. The two never both apply to the same edit.
-    final afterPair =
-        identical(afterIndent, newValue) ? _applyAutoPair(oldValue, newValue) : afterIndent;
+    final afterPair = identical(afterIndent, newValue)
+        ? _applyAutoPair(oldValue, newValue)
+        : afterIndent;
     if (_errorLine != null && afterPair.text != oldValue.text) {
       _errorLine = null;
     }
@@ -128,13 +129,16 @@ class CodeEditorController extends TextEditingController {
     final trimmed = currentLine.trimRight();
 
     var indent = leading;
-    if (trimmed.endsWith('{') || trimmed.endsWith('[') || trimmed.endsWith('(')) {
+    if (trimmed.endsWith('{') ||
+        trimmed.endsWith('[') ||
+        trimmed.endsWith('(')) {
       indent = indent + (' ' * _indentSize);
     }
     if (indent.isEmpty) return newValue;
 
-    final updatedText =
-        newText.substring(0, insertPos + 1) + indent + newText.substring(insertPos + 1);
+    final updatedText = newText.substring(0, insertPos + 1) +
+        indent +
+        newText.substring(insertPos + 1);
     return TextEditingValue(
       text: updatedText,
       selection: TextSelection.collapsed(offset: insertPos + 1 + indent.length),
@@ -156,7 +160,14 @@ class CodeEditorController extends TextEditingController {
   /// (or an auto-pair) already placed" behavior. Quotes are in both
   /// this set and [_autoPairOpenToClose] since the same character
   /// opens and closes a string.
-  static const Set<String> _autoPairSkipOverChars = {')', '}', ']', '>', "'", '"'};
+  static const Set<String> _autoPairSkipOverChars = {
+    ')',
+    '}',
+    ']',
+    '>',
+    "'",
+    '"'
+  };
 
   /// Handles real keyboard-level paired-character insertion (Section
   /// 15). Three cases, checked in order:
@@ -166,7 +177,8 @@ class CodeEditorController extends TextEditingController {
   ///   3. Any other opener insert adds its matching closer right
   ///      after, with the cursor left in between.
   /// Anything else passes through untouched.
-  TextEditingValue _applyAutoPair(TextEditingValue oldValue, TextEditingValue newValue) {
+  TextEditingValue _applyAutoPair(
+      TextEditingValue oldValue, TextEditingValue newValue) {
     final oldText = oldValue.text;
     final newText = newValue.text;
     final oldSel = oldValue.selection;
@@ -176,7 +188,8 @@ class CodeEditorController extends TextEditingController {
     if (oldSel.isValid && !oldSel.isCollapsed && newSel.isCollapsed) {
       final removedLen = oldSel.end - oldSel.start;
       final expectedLen = oldText.length - removedLen + 1;
-      if (newText.length == expectedLen && newSel.baseOffset == oldSel.start + 1) {
+      if (newText.length == expectedLen &&
+          newSel.baseOffset == oldSel.start + 1) {
         final typedChar = newText[oldSel.start];
         final closeChar = _autoPairOpenToClose[typedChar];
         if (closeChar != null) {
@@ -185,7 +198,8 @@ class CodeEditorController extends TextEditingController {
           final after = oldText.substring(oldSel.end);
           return TextEditingValue(
             text: '$before$typedChar$selectedText$closeChar$after',
-            selection: TextSelection.collapsed(offset: oldSel.start + 1 + selectedText.length),
+            selection: TextSelection.collapsed(
+                offset: oldSel.start + 1 + selectedText.length),
           );
         }
       }
@@ -238,7 +252,9 @@ class CodeEditorController extends TextEditingController {
     // composing-region underline behaves correctly. Splitting spans
     // mid-composition is easy to get subtly wrong — falling back here
     // is the safer trade-off rather than faking correctness.
-    if (withComposing && value.isComposingRangeValid && !value.composing.isCollapsed) {
+    if (withComposing &&
+        value.isComposingRangeValid &&
+        !value.composing.isCollapsed) {
       return TextSpan(style: style, text: text);
     }
 
@@ -272,7 +288,8 @@ class CodeEditorController extends TextEditingController {
       breakpoints.add(matchStart);
       breakpoints.add(matchStart + _searchMatchLength);
     }
-    final sorted = breakpoints.where((b) => b >= 0 && b <= source.length).toList();
+    final sorted =
+        breakpoints.where((b) => b >= 0 && b <= source.length).toList();
 
     final children = <TextSpan>[];
     for (var i = 0; i < sorted.length - 1; i++) {
@@ -294,7 +311,8 @@ class CodeEditorController extends TextEditingController {
         }
       }
       final isSearchMatch = searchMatchIndex != -1;
-      final isActiveSearchMatch = isSearchMatch && searchMatchIndex == _activeSearchMatch;
+      final isActiveSearchMatch =
+          isSearchMatch && searchMatchIndex == _activeSearchMatch;
 
       Color? backgroundColor;
       if (isActiveSearchMatch) {
@@ -325,7 +343,8 @@ class CodeEditorController extends TextEditingController {
   TokenType? _tokenTypeCovering(List<SyntaxToken> toks, int start, int end) {
     for (final t in toks) {
       if (t.start <= start && t.end >= end) return t.type;
-      if (t.start >= end) break; // tokens are in source order; no need to scan further
+      if (t.start >= end)
+        break; // tokens are in source order; no need to scan further
     }
     return null;
   }
@@ -334,23 +353,33 @@ class CodeEditorController extends TextEditingController {
     switch (type) {
       case TokenType.keyword:
         return _scheme.keyword;
+
       case TokenType.string:
         return _scheme.string;
+
       case TokenType.comment:
         return _scheme.comment;
+
       case TokenType.number:
         return _scheme.number;
+
       case TokenType.annotation:
+        return _scheme.annotation;
+
       case TokenType.type:
         return _scheme.type;
+
       case TokenType.function:
         return _scheme.function;
+
       case TokenType.variable:
         return _scheme.variable;
+
       case TokenType.operatorSymbol:
         return _scheme.operatorColor;
+
       case TokenType.punctuation:
-        return _scheme.text;
+        return _scheme.punctuation;
     }
   }
 }
