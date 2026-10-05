@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 import '../models/project_file_node.dart';
 import '../models/project_model.dart';
@@ -16,7 +17,8 @@ import '../utils/constants.dart';
 class FileProvider extends ChangeNotifier {
   final FileManagerService _service;
 
-  FileProvider({FileManagerService? service}) : _service = service ?? FileManagerService();
+  FileProvider({FileManagerService? service})
+    : _service = service ?? FileManagerService();
 
   List<ProjectModel> _projects = [];
   ProjectModel? _currentProject;
@@ -58,7 +60,9 @@ class FileProvider extends ChangeNotifier {
 
   Future<void> deleteProject(ProjectModel project) async {
     if (_currentProject?.id == project.id) {
-      await _closeAllTabs(flush: false); // project is being deleted — nothing to save
+      await _closeAllTabs(
+        flush: false,
+      ); // project is being deleted — nothing to save
       _currentProject = null;
       _fileTree = null;
     }
@@ -181,7 +185,8 @@ class FileProvider extends ChangeNotifier {
     });
   }
 
-  Future<void> saveNow(String relativePath, String content) => _writeNow(relativePath, content);
+  Future<void> saveNow(String relativePath, String content) =>
+      _writeNow(relativePath, content);
 
   Future<void> flushPendingSave(String relativePath) async {
     _autoSaveTimers.remove(relativePath)?.cancel();
@@ -213,12 +218,19 @@ class FileProvider extends ChangeNotifier {
   Future<void> createFile(String parentRelativePath, String fileName) async {
     final project = _currentProject;
     if (project == null) return;
-    final newPath = await _service.createFile(project, parentRelativePath, fileName);
+    final newPath = await _service.createFile(
+      project,
+      parentRelativePath,
+      fileName,
+    );
     await refreshFileTree();
     openFile(newPath);
   }
 
-  Future<void> createFolder(String parentRelativePath, String folderName) async {
+  Future<void> createFolder(
+    String parentRelativePath,
+    String folderName,
+  ) async {
     final project = _currentProject;
     if (project == null) return;
     await _service.createFolder(project, parentRelativePath, folderName);
@@ -229,11 +241,19 @@ class FileProvider extends ChangeNotifier {
   /// underneath it) is currently open in a tab, that tab's path — and
   /// its dirty/pending-save/timer state — moves with it, so an in-
   /// progress edit isn't lost just because the file got renamed.
-  Future<void> renameEntry(String relativePath, String newName, {required bool isFolder}) async {
+  Future<void> renameEntry(
+    String relativePath,
+    String newName, {
+    required bool isFolder,
+  }) async {
     final project = _currentProject;
     if (project == null) return;
-    final newPath =
-        await _service.renameEntry(project, relativePath, newName, isFolder: isFolder);
+    final newPath = await _service.renameEntry(
+      project,
+      relativePath,
+      newName,
+      isFolder: isFolder,
+    );
 
     if (!isFolder) {
       _renameTabReference(relativePath, newPath);
@@ -242,7 +262,10 @@ class FileProvider extends ChangeNotifier {
       final newPrefix = '$newPath/';
       for (final oldTabPath in List<String>.from(_openTabs)) {
         if (oldTabPath.startsWith(oldPrefix)) {
-          _renameTabReference(oldTabPath, newPrefix + oldTabPath.substring(oldPrefix.length));
+          _renameTabReference(
+            oldTabPath,
+            newPrefix + oldTabPath.substring(oldPrefix.length),
+          );
         }
       }
     }
@@ -254,7 +277,9 @@ class FileProvider extends ChangeNotifier {
     if (index == -1) return;
     _openTabs[index] = newPath;
     if (_activeTab == oldPath) _activeTab = newPath;
-    if (_dirtyTabs.containsKey(oldPath)) _dirtyTabs[newPath] = _dirtyTabs.remove(oldPath)!;
+    if (_dirtyTabs.containsKey(oldPath)) {
+      _dirtyTabs[newPath] = _dirtyTabs.remove(oldPath)!;
+    }
     if (_pendingContent.containsKey(oldPath)) {
       _pendingContent[newPath] = _pendingContent.remove(oldPath)!;
     }
@@ -263,18 +288,38 @@ class FileProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> deleteEntry(String relativePath, {required bool isFolder}) async {
+  Future<void> deleteEntry(
+    String relativePath, {
+    required bool isFolder,
+  }) async {
     final project = _currentProject;
     if (project == null) return;
     await _service.deleteEntry(project, relativePath, isFolder: isFolder);
 
     final affected = List<String>.from(_openTabs).where(
-      (tabPath) => tabPath == relativePath || (isFolder && tabPath.startsWith('$relativePath/')),
+      (tabPath) =>
+          tabPath == relativePath ||
+          (isFolder && tabPath.startsWith('$relativePath/')),
     );
     for (final tabPath in affected) {
-      await closeTab(tabPath, flush: false); // the file is gone — nothing left to save
+      await closeTab(
+        tabPath,
+        flush: false,
+      ); // the file is gone — nothing left to save
     }
     await refreshFileTree();
+  }
+
+  // ---- Export / Import ----
+
+  /// Returns the absolute path of the currently active file,
+  /// or null if no file is open. Used by the export action to
+  /// locate the file on disk without re-reading its content.
+  String? getActiveFilePath() {
+    final project = _currentProject;
+    final tab = _activeTab;
+    if (project == null || tab == null) return null;
+    return p.join(project.rootPath, tab);
   }
 
   @override

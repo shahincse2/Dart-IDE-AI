@@ -76,7 +76,7 @@ class _VariableInspectorPanelState extends State<VariableInspectorPanel> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: scheme.onSurfaceVariant.withOpacity(0.4),
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),

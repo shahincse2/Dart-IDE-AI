@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../models/console_event.dart';
 import '../providers/file_provider.dart';
 import '../providers/runner_provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/file_share_service.dart';
 import '../utils/constants.dart';
 import '../utils/runner_error_parser.dart';
 import '../utils/themes.dart';
@@ -56,6 +58,8 @@ class _EditorScreenState extends State<EditorScreen> {
   final Map<String, UndoHistoryController> _undoControllers = {};
   final Map<String, List<String>> _argsByPath = {};
   final Set<String> _loadingPaths = {};
+  final FileShareService _fileShareService = FileShareService();
+
   bool _showFindReplace = false;
   bool _findReplaceExpanded = false;
   String? _lastRunPath;
@@ -99,13 +103,78 @@ class _EditorScreenState extends State<EditorScreen> {
     _lastSeenRunnerEventCount = events.length;
   }
 
+  Future<void> _handleExport() async {
+    final activePath = _fileProvider.activeTab;
+    final activeController = activePath != null
+        ? _controllers[activePath]
+        : null;
+    if (activeController == null || activePath == null) return;
+    final fileName = activePath.split('/').last;
+    await _fileShareService.exportDartFile(
+      content: activeController.text,
+      fileName: fileName,
+    );
+  }
+
+  Future<void> _handleImport() async {
+    final result = await _fileShareService.importDartFile();
+    if (result == null || !mounted) return;
+    final project = _fileProvider.currentProject;
+    if (project == null) return;
+    await _fileProvider.createFile('', result.name.replaceAll('.dart', ''));
+    // Wait for the new file to be opened as the active tab,
+    // then write the imported content into its controller.
+    await Future.delayed(const Duration(milliseconds: 300));
+    final activePath = _fileProvider.activeTab;
+    if (activePath != null && mounted) {
+      _controllers[activePath]?.value = TextEditingValue(
+        text: result.content,
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+      _fileProvider.scheduleAutoSave(activePath, result.content);
+    }
+  }
+
+  Future<void> _handleShareCode() async {
+    final activePath = _fileProvider.activeTab;
+    final activeController = activePath != null
+        ? _controllers[activePath]
+        : null;
+    if (activeController == null || activePath == null) return;
+
+    final fileName = activePath.split('/').last;
+
+    // await করার আগেই context ক্যাপচার
+    final messenger = ScaffoldMessenger.of(context);
+
+    final result = await SharePlus.instance.share(
+      ShareParams(text: activeController.text, subject: fileName),
+    );
+
+    if (!mounted) return;
+
+    if (result.status == ShareResultStatus.success) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('"$fileName" shared successfully')),
+      );
+    } else if (result.status == ShareResultStatus.dismissed) {
+      messenger.showSnackBar(const SnackBar(content: Text('Share cancelled')));
+    } else if (result.status == ShareResultStatus.unavailable) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('No app available to share')),
+      );
+    }
+  }
+
   /// Keeps [_controllers] matched to [FileProvider.openTabs]: disposes
   /// controllers for tabs that closed, and creates + loads one for any
   /// newly opened tab.
   Future<void> _syncControllers() async {
     final openTabs = _fileProvider.openTabs;
 
-    final toRemove = _controllers.keys.where((path) => !openTabs.contains(path)).toList();
+    final toRemove = _controllers.keys
+        .where((path) => !openTabs.contains(path))
+        .toList();
     for (final path in toRemove) {
       _controllers.remove(path)?.dispose();
       _undoControllers.remove(path)?.dispose();
@@ -113,7 +182,9 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     for (final path in openTabs) {
-      if (_controllers.containsKey(path) || _loadingPaths.contains(path)) continue;
+      if (_controllers.containsKey(path) || _loadingPaths.contains(path)) {
+        continue;
+      }
       _loadingPaths.add(path);
 
       final settings = context.read<SettingsProvider>();
@@ -136,7 +207,9 @@ class _EditorScreenState extends State<EditorScreen> {
         text: content,
         selection: const TextSelection.collapsed(offset: 0),
       );
-      controller.addListener(() => _fileProvider.scheduleAutoSave(path, controller.text));
+      controller.addListener(
+        () => _fileProvider.scheduleAutoSave(path, controller.text),
+      );
 
       _controllers[path] = controller;
       _undoControllers[path] = UndoHistoryController();
@@ -165,7 +238,9 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _handleRunOrStop() {
     final activePath = _fileProvider.activeTab;
-    final activeController = activePath != null ? _controllers[activePath] : null;
+    final activeController = activePath != null
+        ? _controllers[activePath]
+        : null;
     if (activeController == null) return;
     if (_runnerProvider.isRunning) {
       _runnerProvider.stop();
@@ -173,13 +248,18 @@ class _EditorScreenState extends State<EditorScreen> {
       activeController.setErrorLine(null);
       _lastRunPath = activePath;
       _lastSeenRunnerEventCount = 0;
-      _runnerProvider.run(activeController.text, args: _argsByPath[activePath] ?? const []);
+      _runnerProvider.run(
+        activeController.text,
+        args: _argsByPath[activePath] ?? const [],
+      );
     }
   }
 
   void _handleSave() {
     final activePath = _fileProvider.activeTab;
-    final activeController = activePath != null ? _controllers[activePath] : null;
+    final activeController = activePath != null
+        ? _controllers[activePath]
+        : null;
     if (activeController == null || activePath == null) return;
     _fileProvider.saveNow(activePath, activeController.text);
   }
@@ -198,7 +278,9 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _handleGoToLine() {
     final activePath = _fileProvider.activeTab;
-    final activeController = activePath != null ? _controllers[activePath] : null;
+    final activeController = activePath != null
+        ? _controllers[activePath]
+        : null;
     if (activeController == null) return;
     showGoToLineDialog(context, activeController);
   }
@@ -227,8 +309,12 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     final activePath = fileProvider.activeTab;
-    final activeController = activePath != null ? _controllers[activePath] : null;
-    final activeUndoController = activePath != null ? _undoControllers[activePath] : null;
+    final activeController = activePath != null
+        ? _controllers[activePath]
+        : null;
+    final activeUndoController = activePath != null
+        ? _undoControllers[activePath]
+        : null;
 
     final isTablet = AppConstants.isTablet(context);
     final isLandscape = AppConstants.isLandscape(context);
@@ -246,6 +332,9 @@ class _EditorScreenState extends State<EditorScreen> {
 
     final scaffold = Scaffold(
       appBar: _EditorAppBar(
+        onShareCodePressed: activeController != null ? _handleShareCode : null,
+        onExportPressed: activeController != null ? _handleExport : null,
+        onImportPressed: _handleImport,
         fileName: fileProvider.activeFileName ?? 'No file open',
         isDirty: activePath != null && fileProvider.isDirty(activePath),
         useSidebar: useSidebar,
@@ -254,37 +343,42 @@ class _EditorScreenState extends State<EditorScreen> {
         onSavePressed: activeController != null ? _handleSave : null,
         onFindPressed: activeController != null
             ? () => setState(() {
-                  if (_showFindReplace) {
-                    _showFindReplace = false;
-                  } else {
-                    _showFindReplace = true;
-                    _findReplaceExpanded = false;
-                  }
-                })
+                if (_showFindReplace) {
+                  _showFindReplace = false;
+                } else {
+                  _showFindReplace = true;
+                  _findReplaceExpanded = false;
+                }
+              })
             : null,
         onGoToLinePressed: activeController != null ? _handleGoToLine : null,
         onArgumentsPressed: activeController != null
             ? () async {
                 final current = _argsByPath[activePath]?.join(' ') ?? '';
                 final result = await showArgumentsDialog(context, current);
-                if (result != null) setState(() => _argsByPath[activePath!] = result);
+                if (result != null) {
+                  setState(() => _argsByPath[activePath!] = result);
+                }
               }
             : null,
-        argsCount: activePath != null ? (_argsByPath[activePath]?.length ?? 0) : 0,
+        argsCount: activePath != null
+            ? (_argsByPath[activePath]?.length ?? 0)
+            : 0,
         wordWrap: settings.wordWrap,
         onToggleWordWrap: () => settings.setWordWrap(!settings.wordWrap),
         onFontSizePressed: () => showFontSizeDialog(context, settings),
         onPreviewUiPressed: activeController != null
             ? () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => UiPreviewScreen(source: activeController.text),
-                  ),
-                )
+                MaterialPageRoute(
+                  builder: (_) =>
+                      UiPreviewScreen(source: activeController.text),
+                ),
+              )
             : null,
         onInspectPressed: _handleInspect,
-        onSettingsPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const SettingsScreen()),
-        ),
+        onSettingsPressed: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
       ),
       drawer: useSidebar ? null : const Drawer(child: FileTreeView()),
       body: SafeArea(
@@ -307,13 +401,16 @@ class _EditorScreenState extends State<EditorScreen> {
     // redundant at best and could double-fire at worst.
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyS, control: true): _handleSave,
-        const SingleActivator(LogicalKeyboardKey.enter, control: true): _handleRunOrStop,
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true):
+            _handleSave,
+        const SingleActivator(LogicalKeyboardKey.enter, control: true):
+            _handleRunOrStop,
         const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
             _handleOpenFind(expandReplace: false),
         const SingleActivator(LogicalKeyboardKey.keyH, control: true): () =>
             _handleOpenFind(expandReplace: true),
-        const SingleActivator(LogicalKeyboardKey.keyG, control: true): _handleGoToLine,
+        const SingleActivator(LogicalKeyboardKey.keyG, control: true):
+            _handleGoToLine,
       },
       child: Focus(
         autofocus: true,
@@ -343,6 +440,9 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onPreviewUiPressed;
   final VoidCallback onInspectPressed;
   final VoidCallback onSettingsPressed;
+  final VoidCallback? onExportPressed;
+  final VoidCallback? onImportPressed;
+  final VoidCallback? onShareCodePressed;
 
   const _EditorAppBar({
     required this.fileName,
@@ -361,6 +461,9 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onPreviewUiPressed,
     required this.onInspectPressed,
     required this.onSettingsPressed,
+    required this.onExportPressed,
+    required this.onImportPressed,
+    required this.onShareCodePressed,
   });
 
   @override
@@ -370,9 +473,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Flexible(
-            child: Text(fileName, overflow: TextOverflow.ellipsis),
-          ),
+          Flexible(child: Text(fileName, overflow: TextOverflow.ellipsis)),
           if (isDirty) ...[
             const SizedBox(width: AppConstants.spaceSm),
             Container(
@@ -393,9 +494,16 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
           onPressed: onFindPressed,
         ),
         IconButton(
-          tooltip: 'Save',
-          icon: const Icon(Icons.save_outlined),
-          onPressed: onSavePressed,
+          tooltip: isDirty ? 'Save (unsaved changes)' : 'Save',
+          icon: Icon(
+            Icons.save_outlined,
+            color: isDirty
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.38),
+          ),
+          onPressed: isDirty ? onSavePressed : null,
         ),
         IconButton(
           tooltip: isRunning ? 'Stop' : 'Run',
@@ -429,7 +537,9 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
               value: onArgumentsPressed,
               child: ListTile(
                 leading: const Icon(Icons.terminal_rounded),
-                title: Text(argsCount > 0 ? 'Arguments ($argsCount)' : 'Arguments'),
+                title: Text(
+                  argsCount > 0 ? 'Arguments ($argsCount)' : 'Arguments',
+                ),
                 contentPadding: EdgeInsets.zero,
               ),
             ),
@@ -438,6 +548,33 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
               checked: wordWrap,
               padding: EdgeInsets.zero,
               child: const Text('Word wrap'),
+            ),
+            const PopupMenuDivider(),
+            PopupMenuItem(
+              enabled: onExportPressed != null,
+              value: onExportPressed,
+              child: const ListTile(
+                leading: Icon(Icons.upload_file_outlined),
+                title: Text('Export file'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            PopupMenuItem(
+              value: onImportPressed,
+              child: const ListTile(
+                leading: Icon(Icons.download_for_offline_outlined),
+                title: Text('Import file'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            PopupMenuItem(
+              enabled: onShareCodePressed != null,
+              value: onShareCodePressed,
+              child: const ListTile(
+                leading: Icon(Icons.share_outlined),
+                title: Text('Share code'),
+                contentPadding: EdgeInsets.zero,
+              ),
             ),
             const PopupMenuDivider(),
             PopupMenuItem(
@@ -518,7 +655,10 @@ class _EditorBody extends StatelessWidget {
               : const _NoFileOpenPlaceholder(),
         ),
         if (controller != null && undoController != null)
-          CodingToolbar(controller: controller!, undoController: undoController!),
+          CodingToolbar(
+            controller: controller!,
+            undoController: undoController!,
+          ),
         const ConsolePanel(),
       ],
     );
@@ -536,7 +676,9 @@ class _NoFileOpenPlaceholder extends StatelessWidget {
         child: Text(
           'No file open.\nCreate or pick one from the file tree.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
     );

@@ -123,19 +123,6 @@ const Set<String> _builtinTypes = {
   'Record',
 };
 
-const Set<String> _punctuation = {
-  '{',
-  '}',
-  '(',
-  ')',
-  '[',
-  ']',
-  ';',
-  ',',
-  '.',
-  ':',
-};
-
 const List<String> _multiCharacterOperators = [
   '>>>',
   '>>=',
@@ -219,12 +206,7 @@ List<SyntaxToken> tokenizeDart(String source) {
   if (source.isEmpty) return const [];
 
   final tokens = <SyntaxToken>[];
-  _scanSource(
-    source,
-    0,
-    source.length,
-    tokens,
-  );
+  _scanSource(source, 0, source.length, tokens);
 
   return tokens;
 }
@@ -232,12 +214,7 @@ List<SyntaxToken> tokenizeDart(String source) {
 /// Scans a source range and appends non-overlapping tokens.
 ///
 /// [start] and [end] are absolute offsets into [source].
-void _scanSource(
-  String source,
-  int start,
-  int end,
-  List<SyntaxToken> tokens,
-) {
+void _scanSource(String source, int start, int end, List<SyntaxToken> tokens) {
   var i = start;
 
   while (i < end) {
@@ -253,13 +230,7 @@ void _scanSource(
     if (char == '/' && i + 1 < end && source[i + 1] == '/') {
       final commentEnd = _findLineEnd(source, i, end);
 
-      tokens.add(
-        SyntaxToken(
-          i,
-          commentEnd,
-          TokenType.comment,
-        ),
-      );
+      tokens.add(SyntaxToken(i, commentEnd, TokenType.comment));
 
       i = commentEnd;
       continue;
@@ -269,13 +240,7 @@ void _scanSource(
     if (char == '/' && i + 1 < end && source[i + 1] == '*') {
       final commentEnd = _findBlockCommentEnd(source, i, end);
 
-      tokens.add(
-        SyntaxToken(
-          i,
-          commentEnd,
-          TokenType.comment,
-        ),
-      );
+      tokens.add(SyntaxToken(i, commentEnd, TokenType.comment));
 
       i = commentEnd;
       continue;
@@ -283,30 +248,15 @@ void _scanSource(
 
     // String or raw string.
     if (_isStringStart(source, i, end)) {
-      i = _scanString(
-        source,
-        i,
-        end,
-        tokens,
-      );
+      i = _scanString(source, i, end, tokens);
       continue;
     }
 
     // Annotation.
     if (char == '@' && i + 1 < end && _isIdentifierStart(source[i + 1])) {
-      final annotationEnd = _readIdentifierEnd(
-        source,
-        i + 1,
-        end,
-      );
+      final annotationEnd = _readIdentifierEnd(source, i + 1, end);
 
-      tokens.add(
-        SyntaxToken(
-          i,
-          annotationEnd,
-          TokenType.annotation,
-        ),
-      );
+      tokens.add(SyntaxToken(i, annotationEnd, TokenType.annotation));
 
       i = annotationEnd;
       continue;
@@ -314,19 +264,9 @@ void _scanSource(
 
     // Number.
     if (_isNumberStart(source, i, end)) {
-      final numberEnd = _readNumberEnd(
-        source,
-        i,
-        end,
-      );
+      final numberEnd = _readNumberEnd(source, i, end);
 
-      tokens.add(
-        SyntaxToken(
-          i,
-          numberEnd,
-          TokenType.number,
-        ),
-      );
+      tokens.add(SyntaxToken(i, numberEnd, TokenType.number));
 
       i = numberEnd;
       continue;
@@ -334,53 +274,25 @@ void _scanSource(
 
     // Identifier / keyword / type / function / variable.
     if (_isIdentifierStart(char)) {
-      final identifierEnd = _readIdentifierEnd(
-        source,
-        i,
-        end,
-      );
+      final identifierEnd = _readIdentifierEnd(source, i, end);
 
-      final text = source.substring(
-        i,
-        identifierEnd,
-      );
+      final text = source.substring(i, identifierEnd);
 
-      final type = _classifyIdentifier(
-        text,
-        source,
-        identifierEnd,
-        end,
-      );
+      final type = _classifyIdentifier(text, source, identifierEnd, end);
 
-      tokens.add(
-        SyntaxToken(
-          i,
-          identifierEnd,
-          type,
-        ),
-      );
+      tokens.add(SyntaxToken(i, identifierEnd, type));
 
       i = identifierEnd;
       continue;
     }
 
     // Multi-character operators.
-    final operator = _readMultiCharacterOperator(
-      source,
-      i,
-      end,
-    );
+    final operator = _readMultiCharacterOperator(source, i, end);
 
     if (operator != null) {
       final operatorEnd = i + operator.length;
 
-      tokens.add(
-        SyntaxToken(
-          i,
-          operatorEnd,
-          TokenType.operatorSymbol,
-        ),
-      );
+      tokens.add(SyntaxToken(i, operatorEnd, TokenType.operatorSymbol));
 
       i = operatorEnd;
       continue;
@@ -388,13 +300,7 @@ void _scanSource(
 
     // Single-character punctuation.
     if (_singleCharacterPunctuation.contains(char)) {
-      tokens.add(
-        SyntaxToken(
-          i,
-          i + 1,
-          TokenType.punctuation,
-        ),
-      );
+      tokens.add(SyntaxToken(i, i + 1, TokenType.punctuation));
 
       i++;
       continue;
@@ -402,13 +308,7 @@ void _scanSource(
 
     // Single-character operator.
     if (_singleCharacterOperators.contains(char)) {
-      tokens.add(
-        SyntaxToken(
-          i,
-          i + 1,
-          TokenType.operatorSymbol,
-        ),
-      );
+      tokens.add(SyntaxToken(i, i + 1, TokenType.operatorSymbol));
 
       i++;
       continue;
@@ -431,12 +331,7 @@ void _scanSource(
 ///   - `${expression}` interpolation
 ///
 /// Returns the first offset after the string.
-int _scanString(
-  String source,
-  int start,
-  int end,
-  List<SyntaxToken> tokens,
-) {
+int _scanString(String source, int start, int end, List<SyntaxToken> tokens) {
   var i = start;
 
   var raw = false;
@@ -472,13 +367,7 @@ int _scanString(
     // Closing quote.
     if (char == quote) {
       if (stringSegmentStart < i + 1) {
-        tokens.add(
-          SyntaxToken(
-            stringSegmentStart,
-            i + 1,
-            TokenType.string,
-          ),
-        );
+        tokens.add(SyntaxToken(stringSegmentStart, i + 1, TokenType.string));
       }
 
       return i + 1;
@@ -492,11 +381,7 @@ int _scanString(
 
     // String interpolation.
     if (char == r'$') {
-      final interpolation = _readInterpolation(
-        source,
-        i,
-        end,
-      );
+      final interpolation = _readInterpolation(source, i, end);
 
       if (interpolation == null) {
         i++;
@@ -510,22 +395,14 @@ int _scanString(
       // Emit the string portion before interpolation.
       if (stringSegmentStart < interpolationStart) {
         tokens.add(
-          SyntaxToken(
-            stringSegmentStart,
-            interpolationStart,
-            TokenType.string,
-          ),
+          SyntaxToken(stringSegmentStart, interpolationStart, TokenType.string),
         );
       }
 
       if (interpolationKind == _InterpolationKind.simpleVariable) {
         // `$number`
         tokens.add(
-          SyntaxToken(
-            interpolationStart,
-            interpolationEnd,
-            TokenType.variable,
-          ),
+          SyntaxToken(interpolationStart, interpolationEnd, TokenType.variable),
         );
       } else {
         // `${user.name}`
@@ -536,32 +413,19 @@ int _scanString(
 
         if (expressionStart > interpolationStart) {
           tokens.add(
-            SyntaxToken(
-              interpolationStart,
-              expressionStart,
-              TokenType.string,
-            ),
+            SyntaxToken(interpolationStart, expressionStart, TokenType.string),
           );
         }
 
         // Tokenize the expression using the same lexer.
         if (expressionStart < expressionEnd) {
-          _scanSource(
-            source,
-            expressionStart,
-            expressionEnd,
-            tokens,
-          );
+          _scanSource(source, expressionStart, expressionEnd, tokens);
         }
 
         // `}` is punctuation.
         if (expressionEnd < interpolationEnd) {
           tokens.add(
-            SyntaxToken(
-              expressionEnd,
-              interpolationEnd,
-              TokenType.punctuation,
-            ),
+            SyntaxToken(expressionEnd, interpolationEnd, TokenType.punctuation),
           );
         }
       }
@@ -579,21 +443,9 @@ int _scanString(
   //
   // Color the remaining source as string rather than losing highlighting.
   if (stringSegmentStart < end) {
-    tokens.add(
-      SyntaxToken(
-        stringSegmentStart,
-        end,
-        TokenType.string,
-      ),
-    );
+    tokens.add(SyntaxToken(stringSegmentStart, end, TokenType.string));
   } else if (contentStart < end) {
-    tokens.add(
-      SyntaxToken(
-        start,
-        end,
-        TokenType.string,
-      ),
-    );
+    tokens.add(SyntaxToken(start, end, TokenType.string));
   }
 
   return end;
@@ -602,11 +454,7 @@ int _scanString(
 /// Reads `$name` or `${expression}`.
 ///
 /// Returns null when `$` isn't followed by a valid interpolation.
-_InterpolationInfo? _readInterpolation(
-  String source,
-  int dollar,
-  int end,
-) {
+_InterpolationInfo? _readInterpolation(String source, int dollar, int end) {
   if (dollar + 1 >= end) {
     return null;
   }
@@ -617,11 +465,7 @@ _InterpolationInfo? _readInterpolation(
   //
   // $name
   if (_isIdentifierStart(next)) {
-    final variableEnd = _readIdentifierEnd(
-      source,
-      dollar + 1,
-      end,
-    );
+    final variableEnd = _readIdentifierEnd(source, dollar + 1, end);
 
     return _InterpolationInfo(
       dollar,
@@ -658,11 +502,7 @@ _InterpolationInfo? _readInterpolation(
 ///
 /// The scanner understands nested braces, strings, and comments well enough
 /// for normal Dart interpolation expressions.
-int _findInterpolationClosingBrace(
-  String source,
-  int start,
-  int end,
-) {
+int _findInterpolationClosingBrace(String source, int start, int end) {
   var depth = 1;
   var i = start;
 
@@ -683,11 +523,7 @@ int _findInterpolationClosingBrace(
 
     // String inside interpolation.
     if (_isStringStart(source, i, end)) {
-      i = _skipString(
-        source,
-        i,
-        end,
-      );
+      i = _skipString(source, i, end);
       continue;
     }
 
@@ -717,11 +553,7 @@ int _findInterpolationClosingBrace(
 /// Skips a string while searching for the end of an interpolation.
 ///
 /// This does not generate tokens.
-int _skipString(
-  String source,
-  int start,
-  int end,
-) {
+int _skipString(String source, int start, int end) {
   var i = start;
   var raw = false;
 
@@ -755,11 +587,7 @@ int _skipString(
   return end;
 }
 
-bool _isStringStart(
-  String source,
-  int index,
-  int end,
-) {
+bool _isStringStart(String source, int index, int end) {
   final char = source[index];
 
   if (char == '"' || char == "'") {
@@ -775,11 +603,7 @@ bool _isStringStart(
   return false;
 }
 
-bool _isNumberStart(
-  String source,
-  int index,
-  int end,
-) {
+bool _isNumberStart(String source, int index, int end) {
   final char = source[index];
 
   if (_isDigit(char)) {
@@ -794,11 +618,7 @@ bool _isNumberStart(
   return false;
 }
 
-int _readNumberEnd(
-  String source,
-  int start,
-  int end,
-) {
+int _readNumberEnd(String source, int start, int end) {
   var i = start;
 
   // Integer / decimal part.
@@ -861,22 +681,14 @@ TokenType _classifyIdentifier(
     return TokenType.type;
   }
 
-  if (_isFollowedByOpenParen(
-    source,
-    end,
-    sourceEnd,
-  )) {
+  if (_isFollowedByOpenParen(source, end, sourceEnd)) {
     return TokenType.function;
   }
 
   return TokenType.variable;
 }
 
-bool _isFollowedByOpenParen(
-  String source,
-  int end,
-  int sourceEnd,
-) {
+bool _isFollowedByOpenParen(String source, int end, int sourceEnd) {
   var i = end;
 
   while (i < sourceEnd &&
@@ -890,11 +702,7 @@ bool _isFollowedByOpenParen(
   return i < sourceEnd && source[i] == '(';
 }
 
-int _readIdentifierEnd(
-  String source,
-  int start,
-  int end,
-) {
+int _readIdentifierEnd(String source, int start, int end) {
   var i = start;
 
   while (i < end && _isIdentifierPart(source[i])) {
@@ -904,11 +712,7 @@ int _readIdentifierEnd(
   return i;
 }
 
-String? _readMultiCharacterOperator(
-  String source,
-  int start,
-  int end,
-) {
+String? _readMultiCharacterOperator(String source, int start, int end) {
   for (final operator in _multiCharacterOperators) {
     final operatorEnd = start + operator.length;
 
@@ -921,11 +725,7 @@ String? _readMultiCharacterOperator(
   return null;
 }
 
-int _findLineEnd(
-  String source,
-  int start,
-  int end,
-) {
+int _findLineEnd(String source, int start, int end) {
   var i = start;
 
   while (i < end && source[i] != '\n') {
@@ -935,11 +735,7 @@ int _findLineEnd(
   return i;
 }
 
-int _findBlockCommentEnd(
-  String source,
-  int start,
-  int end,
-) {
+int _findBlockCommentEnd(String source, int start, int end) {
   var i = start + 2;
 
   while (i + 1 < end) {
@@ -975,21 +771,14 @@ bool _isIdentifierPart(String char) {
   return _isIdentifierStart(char) || _isDigit(char);
 }
 
-enum _InterpolationKind {
-  simpleVariable,
-  bracedExpression,
-}
+enum _InterpolationKind { simpleVariable, bracedExpression }
 
 class _InterpolationInfo {
   final int start;
   final int end;
   final _InterpolationKind kind;
 
-  const _InterpolationInfo(
-    this.start,
-    this.end,
-    this.kind,
-  );
+  const _InterpolationInfo(this.start, this.end, this.kind);
 }
 
 //================================================================================================================

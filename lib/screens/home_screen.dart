@@ -36,9 +36,9 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             tooltip: 'Settings',
             icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
           ),
         ],
       ),
@@ -49,7 +49,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? ListView.separated(
                     padding: const EdgeInsets.all(AppConstants.spaceMd),
                     itemCount: fileProvider.projects.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: AppConstants.spaceSm),
+                    separatorBuilder: (_, __) =>
+                        const SizedBox(height: AppConstants.spaceSm),
                     itemBuilder: (context, i) {
                       final project = fileProvider.projects[i];
                       return Card(
@@ -88,9 +89,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final fileProvider = context.read<FileProvider>();
     await fileProvider.openProject(project);
     if (!context.mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const EditorScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const EditorScreen()));
   }
 }
 

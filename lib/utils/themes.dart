@@ -144,12 +144,100 @@ class EditorColorScheme {
     punctuation: Color(0xFFF8F8F2),
   );
 
+  static const solarizedDark = EditorColorScheme(
+    name: 'Solarized Dark',
+    background: Color(0xFF002B36),
+    gutterBackground: Color(0xFF073642),
+    gutterText: Color(0xFF586E75),
+    text: Color(0xFF839496),
+    currentLine: Color(0xFF073642),
+    selection: Color(0xFF073642),
+    cursor: Color(0xFF839496),
+    keyword: Color(0xFF859900),
+    string: Color(0xFF2AA198),
+    comment: Color(0xFF586E75),
+    number: Color(0xFFD33682),
+    annotation: Color(0xFFB58900),
+    function: Color(0xFF268BD2),
+    type: Color(0xFFB58900),
+    variable: Color(0xFF839496),
+    operatorColor: Color(0xFF859900),
+    punctuation: Color(0xFF839496),
+  );
+
+  static const oneDark = EditorColorScheme(
+    name: 'One Dark',
+    background: Color(0xFF282C34),
+    gutterBackground: Color(0xFF282C34),
+    gutterText: Color(0xFF495162),
+    text: Color(0xFFABB2BF),
+    currentLine: Color(0xFF2C313A),
+    selection: Color(0xFF3E4451),
+    cursor: Color(0xFF528BFF),
+    keyword: Color(0xFFC678DD),
+    string: Color(0xFF98C379),
+    comment: Color(0xFF5C6370),
+    number: Color(0xFFD19A66),
+    annotation: Color(0xFFE5C07B),
+    function: Color(0xFF61AFEF),
+    type: Color(0xFFE5C07B),
+    variable: Color(0xFFE06C75),
+    operatorColor: Color(0xFF56B6C2),
+    punctuation: Color(0xFFABB2BF),
+  );
+
+  static const nightOwl = EditorColorScheme(
+    name: 'Night Owl',
+    background: Color(0xFF011627),
+    gutterBackground: Color(0xFF011627),
+    gutterText: Color(0xFF4B6479),
+    text: Color(0xFFD6DEEB),
+    currentLine: Color(0xFF0E2233),
+    selection: Color(0xFF1D3B53),
+    cursor: Color(0xFF80A4C2),
+    keyword: Color(0xFFC792EA),
+    string: Color(0xFFECC48D),
+    comment: Color(0xFF637777),
+    number: Color(0xFFF78C6C),
+    annotation: Color(0xFFFFCB8B),
+    function: Color(0xFF82AAFF),
+    type: Color(0xFFFFCB8B),
+    variable: Color(0xFFADDB67),
+    operatorColor: Color(0xFF7FDBCA),
+    punctuation: Color(0xFFD6DEEB),
+  );
+
+  static const githubLight = EditorColorScheme(
+    name: 'GitHub Light',
+    background: Color(0xFFFFFFFF),
+    gutterBackground: Color(0xFFF6F8FA),
+    gutterText: Color(0xFF8C959F),
+    text: Color(0xFF1F2328),
+    currentLine: Color(0xFFEAF5FB),
+    selection: Color(0xFFBAE2FB),
+    cursor: Color(0xFF0969DA),
+    keyword: Color(0xFFCF222E),
+    string: Color(0xFF0A3069),
+    comment: Color(0xFF6E7781),
+    number: Color(0xFF0550AE),
+    annotation: Color(0xFF953800),
+    function: Color(0xFF8250DF),
+    type: Color(0xFF953800),
+    variable: Color(0xFF1F2328),
+    operatorColor: Color(0xFFCF222E),
+    punctuation: Color(0xFF1F2328),
+  );
+
   /// All themes, in the order they should be offered in Settings.
   static const List<EditorColorScheme> all = [
     dark,
     light,
     dracula,
     monokai,
+    oneDark,
+    solarizedDark,
+    nightOwl,
+    githubLight,
   ];
 }
 

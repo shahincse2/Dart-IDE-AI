@@ -5,6 +5,9 @@ description: >
 publish_to: 'none'
 version: 0.1.0+1
 
+#environment:
+#  sdk: '>=3.3.0 <4.0.0'
+#  flutter: '>=3.19.0'
 environment:
   sdk: '>=3.3.0 <4.0.0'
   flutter: '>=3.19.0'
@@ -23,7 +26,7 @@ dependencies:
 
   # Dart execution engine (Phase 3). Runs inside a dedicated Isolate —
   # see services/dart_runner_service.dart for why.
-  tom_d4rt: ^1.77.0
+  #tom_d4rt: ^1.77.0
 
   # UI Run mode (Phase 9): interprets a Dart script's top-level
   # `Widget build(BuildContext)` into a real, live Flutter widget tree.
@@ -38,11 +41,22 @@ dependencies:
   # without pub.dev access in this environment. If `pub get` reports a
   # version conflict, the fix is adjusting the tom_d4rt constraint
   # above to whatever tom_d4rt_flutter actually requires.
-  tom_d4rt_flutter: ^1.0.1
+  #tom_d4rt_flutter: ^1.2.0
+
+#  tom_d4rt: ^1.224.0 # অথবা সর্বশেষ ভার্সন
+#  tom_d4rt_flutter: ^1.2.0
+  tom_d4rt: ^1.77.0
+  tom_d4rt_flutter:
+    path: ../packages/tom_d4rt_flutter
+  share_plus: ^13.3.0
+  file_picker: ^13.1.0
+  open_filex: ^4.7.0
+  cross_file: ^0.3.4
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true

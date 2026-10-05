@@ -28,10 +28,9 @@ class CodeEditorController extends TextEditingController {
   CodeEditorController({
     required EditorColorScheme scheme,
     int indentSize = 2,
-    String? text,
-  })  : _scheme = scheme,
-        _indentSize = indentSize,
-        super(text: text);
+    super.text,
+  }) : _scheme = scheme,
+       _indentSize = indentSize;
 
   EditorColorScheme get scheme => _scheme;
   set scheme(EditorColorScheme value) {
@@ -113,7 +112,8 @@ class CodeEditorController extends TextEditingController {
     final newText = newValue.text;
     final newSel = newValue.selection;
 
-    final isSingleNewlineInsert = newText.length == oldText.length + 1 &&
+    final isSingleNewlineInsert =
+        newText.length == oldText.length + 1 &&
         newSel.isCollapsed &&
         newSel.baseOffset > 0 &&
         newSel.baseOffset <= newText.length &&
@@ -136,7 +136,8 @@ class CodeEditorController extends TextEditingController {
     }
     if (indent.isEmpty) return newValue;
 
-    final updatedText = newText.substring(0, insertPos + 1) +
+    final updatedText =
+        newText.substring(0, insertPos + 1) +
         indent +
         newText.substring(insertPos + 1);
     return TextEditingValue(
@@ -166,7 +167,7 @@ class CodeEditorController extends TextEditingController {
     ']',
     '>',
     "'",
-    '"'
+    '"',
   };
 
   /// Handles real keyboard-level paired-character insertion (Section
@@ -178,7 +179,9 @@ class CodeEditorController extends TextEditingController {
   ///      after, with the cursor left in between.
   /// Anything else passes through untouched.
   TextEditingValue _applyAutoPair(
-      TextEditingValue oldValue, TextEditingValue newValue) {
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     final oldText = oldValue.text;
     final newText = newValue.text;
     final oldSel = oldValue.selection;
@@ -199,7 +202,8 @@ class CodeEditorController extends TextEditingController {
           return TextEditingValue(
             text: '$before$typedChar$selectedText$closeChar$after',
             selection: TextSelection.collapsed(
-                offset: oldSel.start + 1 + selectedText.length),
+              offset: oldSel.start + 1 + selectedText.length,
+            ),
           );
         }
       }
@@ -208,7 +212,8 @@ class CodeEditorController extends TextEditingController {
 
     // Cases 2 & 3 both require a plain single-character insertion at
     // the old cursor position with no prior selection.
-    final isSingleCharTyped = newText.length == oldText.length + 1 &&
+    final isSingleCharTyped =
+        newText.length == oldText.length + 1 &&
         oldSel.isCollapsed &&
         newSel.isCollapsed &&
         newSel.baseOffset == oldSel.baseOffset + 1;
@@ -288,8 +293,9 @@ class CodeEditorController extends TextEditingController {
       breakpoints.add(matchStart);
       breakpoints.add(matchStart + _searchMatchLength);
     }
-    final sorted =
-        breakpoints.where((b) => b >= 0 && b <= source.length).toList();
+    final sorted = breakpoints
+        .where((b) => b >= 0 && b <= source.length)
+        .toList();
 
     final children = <TextSpan>[];
     for (var i = 0; i < sorted.length - 1; i++) {
@@ -298,7 +304,8 @@ class CodeEditorController extends TextEditingController {
       if (start >= end) continue;
 
       final tokenType = _tokenTypeCovering(toks, start, end);
-      final isBracketMatch = bracketMatch != null &&
+      final isBracketMatch =
+          bracketMatch != null &&
           end - start == 1 &&
           (start == bracketMatch.openIndex || start == bracketMatch.closeIndex);
 
@@ -323,14 +330,16 @@ class CodeEditorController extends TextEditingController {
         backgroundColor = _scheme.selection.withValues(alpha: 0.55);
       }
 
-      children.add(TextSpan(
-        text: source.substring(start, end),
-        style: style?.copyWith(
-          color: tokenType != null ? _colorFor(tokenType) : _scheme.text,
-          backgroundColor: backgroundColor,
-          fontWeight: isBracketMatch ? FontWeight.w700 : null,
+      children.add(
+        TextSpan(
+          text: source.substring(start, end),
+          style: style?.copyWith(
+            color: tokenType != null ? _colorFor(tokenType) : _scheme.text,
+            backgroundColor: backgroundColor,
+            fontWeight: isBracketMatch ? FontWeight.w700 : null,
+          ),
         ),
-      ));
+      );
     }
 
     return TextSpan(style: style, children: children);
@@ -343,8 +352,9 @@ class CodeEditorController extends TextEditingController {
   TokenType? _tokenTypeCovering(List<SyntaxToken> toks, int start, int end) {
     for (final t in toks) {
       if (t.start <= start && t.end >= end) return t.type;
-      if (t.start >= end)
+      if (t.start >= end) {
         break; // tokens are in source order; no need to scan further
+      }
     }
     return null;
   }
