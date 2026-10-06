@@ -3,40 +3,38 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../utils/constants.dart';
+import '../utils/fold_regions.dart';
 import '../utils/themes.dart';
 import 'code_editor_controller.dart';
 
 /// The editing surface itself: a line-number gutter kept in lockstep
-/// with the text via a shared [ScrollController] (Section 9), a subtle
-/// current-line highlight (Section 10), and the text field wired to
-/// [CodeEditorController] for highlighting/bracket-matching/auto-indent.
+/// with the text via a shared [ScrollController], a subtle current-line
+/// highlight, and the text field wired to [CodeEditorController] for
+/// highlighting/bracket-matching/auto-indent.
 ///
-/// Gutter alignment (mobile fix):
+/// Gutter alignment:
+///  * System text scaling is switched off for the whole editor area
+///    (`MediaQuery.withNoTextScaling`) so the gutter's fixed line height
+///    matches the TextField's rows.
+///  * Every line's vertical position comes from `_lineTops`, computed by
+///    measuring how many visual rows each logical line takes (word wrap)
+///    — not from `lineIndex * lineHeight`.
 ///
-/// 1. System text scaling is switched off for the whole editor area
-///    (`MediaQuery.withNoTextScaling`). Phones commonly run with a
-///    font scale > 1.0 (e.g. Samsung's font-size setting). The
-///    TextField scales its text AND its strut, so its rows became
-///    taller than `fontSize * editorLineHeight`, while the gutter —
-///    positioned from that unscaled number — stayed shorter. The gap
-///    compounded line after line. The editor's own Font size dialog
-///    is the single source of truth for size now.
-///
-/// 2. Word wrap: on a narrow screen one logical line can occupy several
-///    visual rows. The gutter used to assume exactly one row per
-///    logical line, so every number after a wrapped line sat one row
-///    too high. We now measure how many rows each logical line takes
-///    (TextPainter, same style/strut/width as the TextField) and place
-///    gutter numbers, the current-line highlight and the error
-///    highlight by visual row. Results are cached per line, so typing
-///    only re-measures the line that changed.
-///
-/// Reactivity is deliberately a single listener on this State: one
-/// `setState` rebuilds gutter, highlights and text field together.
-///
-/// This widget is NOT re-keyed per open tab in EditorScreen — see the
-/// notes in EditorScreen: swapping the controller in `didUpdateWidget`
-/// keeps the cursor position across tab switches.
+/// Code folding (Phase 11):
+///  * Foldable lines get a chevron in the gutter; tapping the chevron or
+///    the line number folds/unfolds.
+///  * A folded block shows as ONE placeholder row between the opening and
+///    the closing line, with a small "..." chip indented like the folded
+///    code (tap the chip, or the row, to unfold):
+///        for (...) {
+///            [...]
+///        }
+///    The folded lines stay in the text; the controller draws them as
+///    zero-width characters with a single line break at the end. In
+///    `_lineTops` the first hidden line owns that one placeholder row and
+///    the rest of the hidden lines are 0px tall.
+///  * The forced strut stays on at all times, so line heights are the
+///    same with or without folds.
 class CodeEditor extends StatefulWidget {
   final CodeEditorController controller;
   final double fontSize;
@@ -63,27 +61,36 @@ class _CodeEditorState extends State<CodeEditor> {
   /// of the wrapping width. cursorWidth is 2 below.
   static const double _caretMargin = 3.0;
 
-  // ---- Row-layout cache -------------------------------------------------
+  /// Width reserved at the left of the gutter for the fold chevron.
+  static const double _chevronWidth = 16.0;
+
+  // ---- Layout cache -----------------------------------------------------
   final Map<String, int> _lineRowsCache = {};
   final Map<String, double> _lineWidthCache = {};
 
-  /// Natural width of the widest line (word wrap OFF only).
+  /// Natural width of the widest visible line (word wrap OFF only).
   double _maxLineWidth = 0;
 
-  /// `_rowStarts[i]` = first visual row of logical line i.
-  /// `_rowStarts.last` = total visual rows. Length = lineCount + 1.
-  List<int> _rowStarts = const [0];
+  /// `_lineTops[i]` = y (px) of the top of logical line i.
+  /// `_lineTops.last` = total content height. Length = lineCount + 1.
+  List<double> _lineTops = const [0.0];
+  List<String> _lines = const [''];
 
   String? _layoutText;
   double _layoutWidth = -1;
   double _layoutFontSize = -1;
   bool _layoutWrap = true;
+  String _layoutHiddenSig = '';
   TextStyle? _measureStyle;
   double _measureWidth = 1;
   double _charWidth = 0;
 
+  List<FoldRegion>? _regionsSrc;
+  Map<int, FoldRegion> _regionByStart = const {};
+
   double get _lineHeight => widget.fontSize * AppConstants.editorLineHeight;
 
+  /// Forced strut: every visual row is exactly one line tall.
   StrutStyle get _strutStyle => StrutStyle(
         fontFamily: editorFontFamily,
         fontSize: widget.fontSize,
@@ -113,17 +120,15 @@ class _CodeEditorState extends State<CodeEditor> {
     }
   }
 
-  /// Text or selection changed — redraw, and auto-scroll the cursor
-  /// into view (Find & Replace navigation, Go to Line, typing past the
-  /// bottom edge).
+  /// Text, selection or fold state changed — redraw, and auto-scroll the
+  /// cursor into view.
   void _onControllerChanged() {
     setState(() {});
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureCursorVisible());
   }
 
   /// The user scrolled — just redraw the gutter/highlights to track the
-  /// new offset. Deliberately does NOT call `_ensureCursorVisible`
-  /// (that made manual scrolling snap back to the cursor).
+  /// new offset. Deliberately does NOT call `_ensureCursorVisible`.
   void _onScrollChanged() {
     setState(() {});
   }
@@ -139,7 +144,7 @@ class _CodeEditorState extends State<CodeEditor> {
     final lineIndex = '\n'.allMatches(before).length;
     final lineStart = before.lastIndexOf('\n') + 1;
 
-    if (lineIndex >= _rowStarts.length - 1) return;
+    if (lineIndex >= _lineTops.length - 1) return;
 
     // With word wrap, the caret may sit on a later visual row of its
     // logical line — find which one.
@@ -162,7 +167,7 @@ class _CodeEditorState extends State<CodeEditor> {
       rowInLine = (dy / _lineHeight).floor();
     }
 
-    final lineTop = (_rowStarts[lineIndex] + rowInLine) * _lineHeight;
+    final lineTop = _lineTops[lineIndex] + rowInLine * _lineHeight;
     final lineBottom = lineTop + _lineHeight;
 
     final viewTop = _scrollController.offset;
@@ -204,33 +209,8 @@ class _CodeEditorState extends State<CodeEditor> {
     final digits = lineCount.toString().length;
     return (digits * widget.fontSize * 0.62) +
         AppConstants.spaceMd +
-        AppConstants.spaceXs;
-  }
-
-  /// Natural (unwrapped) width of one line, cached by text. Plain-ASCII
-  /// lines in a monospace font are exactly `length * charWidth` (the
-  /// measured char width already includes the style's letterSpacing);
-  /// anything else is measured with a TextPainter.
-  double _widthForLine(String line) {
-    if (line.isEmpty) return 0;
-    final cached = _lineWidthCache[line];
-    if (cached != null) return cached;
-
-    double w;
-    if (_isPlainAscii(line)) {
-      w = line.length * _charWidth;
-    } else {
-      final tp = TextPainter(
-        text: TextSpan(text: line, style: _measureStyle),
-        strutStyle: _strutStyle,
-        textDirection: TextDirection.ltr,
-        textScaler: TextScaler.noScaling,
-      )..layout();
-      w = tp.width;
-      tp.dispose();
-    }
-    _lineWidthCache[line] = w;
-    return w;
+        AppConstants.spaceXs +
+        _chevronWidth;
   }
 
   /// The exact style the TextField renders with. TextField merges the
@@ -297,19 +277,74 @@ class _CodeEditorState extends State<CodeEditor> {
     return rows;
   }
 
-  /// Rebuilds [_rowStarts] when the text, wrapping width, font size,
-  /// wrap mode or style changed; otherwise returns immediately.
+  /// Natural (unwrapped) width of one line, cached by text. Plain-ASCII
+  /// lines in a monospace font are exactly `length * charWidth` (the
+  /// measured char width already includes the style's letterSpacing);
+  /// anything else is measured with a TextPainter.
+  double _widthForLine(String line) {
+    if (line.isEmpty) return 0;
+    final cached = _lineWidthCache[line];
+    if (cached != null) return cached;
+
+    double w;
+    if (_isPlainAscii(line)) {
+      w = line.length * _charWidth;
+    } else {
+      final tp = TextPainter(
+        text: TextSpan(text: line, style: _measureStyle),
+        strutStyle: _strutStyle,
+        textDirection: TextDirection.ltr,
+        textScaler: TextScaler.noScaling,
+      )..layout();
+      w = tp.width;
+      tp.dispose();
+    }
+    _lineWidthCache[line] = w;
+    return w;
+  }
+
+  static bool _isLineHidden(int line, List<LineRange> ranges) {
+    for (final r in ranges) {
+      if (line >= r.first && line <= r.last) return true;
+      if (r.first > line) break;
+    }
+    return false;
+  }
+
+  /// Exact unwrapped width of one line (used for the fold chip, which
+  /// only exists for a handful of lines, so measuring is cheap).
+  double _measureLineWidth(String line) {
+    if (line.isEmpty) return 0;
+    final tp = TextPainter(
+      text: TextSpan(text: line, style: _measureStyle),
+      strutStyle: _strutStyle,
+      textDirection: TextDirection.ltr,
+      textScaler: TextScaler.noScaling,
+    )..layout();
+    final w = tp.width;
+    tp.dispose();
+    return w;
+  }
+
+  /// Rebuilds [_lineTops] when the text, wrapping width, font size, wrap
+  /// mode, style or fold state changed; otherwise returns immediately.
   void _ensureRowLayout({
     required String text,
     required double wrapWidth,
     required TextStyle style,
+    required List<LineRange> hiddenLines,
+    required String hiddenSig,
   }) {
     final wrap = widget.wordWrap;
     final measureUnchanged = _layoutWidth == wrapWidth &&
         _layoutFontSize == widget.fontSize &&
         _layoutWrap == wrap &&
         _measureStyle == style;
-    if (measureUnchanged && _layoutText == text) return;
+    if (measureUnchanged &&
+        _layoutText == text &&
+        _layoutHiddenSig == hiddenSig) {
+      return;
+    }
 
     if (!measureUnchanged) {
       _lineRowsCache.clear();
@@ -324,40 +359,61 @@ class _CodeEditorState extends State<CodeEditor> {
     _layoutFontSize = widget.fontSize;
     _layoutWrap = wrap;
     _layoutText = text;
+    _layoutHiddenSig = hiddenSig;
     if (!measureUnchanged) _charWidth = _measureCharWidth(style);
 
     final lines = text.split('\n');
-    final starts = List<int>.filled(lines.length + 1, 0);
-    var rows = 0;
+    final tops = List<double>.filled(lines.length + 1, 0);
+    var y = 0.0;
     var maxWidth = 0.0;
+    var hr = 0; // pointer into hiddenLines (sorted)
     for (var i = 0; i < lines.length; i++) {
-      starts[i] = rows;
+      while (hr < hiddenLines.length && hiddenLines[hr].last < i) {
+        hr++;
+      }
+      final hidden = hr < hiddenLines.length && hiddenLines[hr].first <= i;
+
+      tops[i] = y;
+      if (hidden) {
+        // The first hidden line of a range owns the single placeholder
+        // row; the rest of the range adds no height.
+        if (i == hiddenLines[hr].first) y += _lineHeight;
+        continue;
+      }
       if (wrap) {
-        rows += _rowsForLine(lines[i]);
+        y += _rowsForLine(lines[i]) * _lineHeight;
       } else {
-        rows += 1;
+        y += _lineHeight;
         final w = _widthForLine(lines[i]);
         if (w > maxWidth) maxWidth = w;
       }
     }
-    starts[lines.length] = rows;
-    _rowStarts = starts;
+    tops[lines.length] = y;
+    _lines = lines;
+    _lineTops = tops;
     _maxLineWidth = maxWidth;
   }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = widget.controller.scheme;
-    final text = widget.controller.text;
+    final ctrl = widget.controller;
+    final scheme = ctrl.scheme;
+    final text = ctrl.text;
     final lineCount = _lineCountOf(text);
     final currentLine = _currentLineIndex();
     final scrollOffset =
         _scrollController.hasClients ? _scrollController.offset : 0.0;
-    final viewportHeight = _scrollController.hasClients
-        ? _scrollController.position.viewportDimension
-        : null;
     final gutterWidth = _gutterWidthFor(lineCount);
     final textStyle = _editorTextStyle(context, scheme);
+
+    final hiddenLines = ctrl.hiddenLineRanges;
+    final hiddenSig = ctrl.hiddenSignature;
+
+    final regions = ctrl.foldRegions;
+    if (!identical(_regionsSrc, regions)) {
+      _regionsSrc = regions;
+      _regionByStart = {for (final r in regions) r.startLine: r};
+    }
 
     return MediaQuery.withNoTextScaling(
       child: ColoredBox(
@@ -371,8 +427,46 @@ class _CodeEditorState extends State<CodeEditor> {
               text: text,
               wrapWidth: math.max(1.0, textAreaWidth - _caretMargin),
               style: textStyle,
+              hiddenLines: hiddenLines,
+              hiddenSig: hiddenSig,
             );
-            final rowStarts = _rowStarts;
+            final lineTops = _lineTops;
+
+            // One "..." chip per folded block, on its placeholder row
+            // (the first hidden line), indented like the folded code.
+            final chips = <Widget>[];
+            for (final s in ctrl.foldedStartLines) {
+              final region = _regionByStart[s];
+              if (region == null) continue;
+              if (_isLineHidden(s, hiddenLines))
+                continue; // inside an outer fold
+              final p = s + 1; // placeholder row = first hidden line
+              if (p + 1 >= lineTops.length || p >= _lines.length) continue;
+
+              var indent = '';
+              for (var l = p; l < region.endLine && l < _lines.length; l++) {
+                final t = _lines[l];
+                if (t.trim().isEmpty) continue;
+                indent = t.substring(0, t.length - t.trimLeft().length);
+                break;
+              }
+              final x = indent.isEmpty
+                  ? 0.0
+                  : _measureLineWidth('${indent}x') - _measureLineWidth('x');
+
+              chips.add(
+                Positioned(
+                  left: AppConstants.spaceSm + x,
+                  top: lineTops[p] - scrollOffset,
+                  height: _lineHeight,
+                  child: _FoldChip(
+                    scheme: scheme,
+                    lineHeight: _lineHeight,
+                    onTap: () => ctrl.toggleFold(s),
+                  ),
+                ),
+              );
+            }
 
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -382,10 +476,20 @@ class _CodeEditorState extends State<CodeEditor> {
                   lineHeight: _lineHeight,
                   fontSize: widget.fontSize,
                   width: gutterWidth,
-                  rowStarts: rowStarts,
+                  chevronWidth: _chevronWidth,
+                  lineTops: lineTops,
+                  hiddenLines: hiddenLines,
                   currentLine: currentLine,
                   scrollOffset: scrollOffset,
-                  viewportHeight: viewportHeight,
+                  // The CURRENT height of the editor area. (Reading the
+                  // scroll position's viewportDimension here was stale
+                  // after any layout change — keyboard, console panel —
+                  // so numbers below the old height were never drawn.)
+                  viewportHeight:
+                      outer.maxHeight.isFinite ? outer.maxHeight : null,
+                  regionByStart: _regionByStart,
+                  isFolded: ctrl.isFolded,
+                  onToggleFold: ctrl.toggleFold,
                 ),
                 Container(
                     width: 0.5,
@@ -398,24 +502,24 @@ class _CodeEditorState extends State<CodeEditor> {
                           _ErrorLineHighlight(
                             scheme: scheme,
                             lineHeight: _lineHeight,
-                            errorLine: widget.controller.errorLine,
-                            rowStarts: rowStarts,
+                            errorLine: ctrl.errorLine,
+                            lineTops: lineTops,
                             scrollOffset: scrollOffset,
                           ),
                           _CurrentLineHighlight(
                             scheme: scheme,
                             lineHeight: _lineHeight,
                             currentLine: currentLine,
-                            rowStarts: rowStarts,
+                            lineTops: lineTops,
                             scrollOffset: scrollOffset,
-                            hasSelection: widget.controller.selection.isValid &&
-                                widget.controller.selection.isCollapsed,
+                            hasSelection: ctrl.selection.isValid &&
+                                ctrl.selection.isCollapsed,
                           ),
                           Padding(
                             padding: const EdgeInsets.only(
                                 left: AppConstants.spaceSm),
                             child: TextField(
-                              controller: widget.controller,
+                              controller: ctrl,
                               scrollController: _scrollController,
                               focusNode: _focusNode,
                               undoController: widget.undoController,
@@ -436,6 +540,7 @@ class _CodeEditorState extends State<CodeEditor> {
                               ),
                             ),
                           ),
+                          ...chips,
                         ],
                       );
 
@@ -447,8 +552,7 @@ class _CodeEditorState extends State<CodeEditor> {
                       // out even a few pixels too small, the TextField
                       // would wrap the tail of the longest line onto an
                       // extra row and push every gutter number below it
-                      // out of alignment. The gutter stays outside, so
-                      // line numbers remain visible while code scrolls.
+                      // out of alignment.
                       final contentWidth = math.max(
                         _maxLineWidth + AppConstants.spaceSm + _caretMargin + 8,
                         constraints.maxWidth,
@@ -479,33 +583,43 @@ class _LineNumberGutter extends StatelessWidget {
   final double lineHeight;
   final double fontSize;
   final double width;
-  final List<int> rowStarts;
+  final double chevronWidth;
+  final List<double> lineTops;
+  final List<LineRange> hiddenLines;
   final int currentLine;
   final double scrollOffset;
   final double? viewportHeight;
+  final Map<int, FoldRegion> regionByStart;
+  final bool Function(int line) isFolded;
+  final void Function(int line) onToggleFold;
 
   const _LineNumberGutter({
     required this.scheme,
     required this.lineHeight,
     required this.fontSize,
     required this.width,
-    required this.rowStarts,
+    required this.chevronWidth,
+    required this.lineTops,
+    required this.hiddenLines,
     required this.currentLine,
     required this.scrollOffset,
     required this.viewportHeight,
+    required this.regionByStart,
+    required this.isFolded,
+    required this.onToggleFold,
   });
 
   @override
   Widget build(BuildContext context) {
-    final lineCount = rowStarts.length - 1;
+    final lineCount = lineTops.length - 1;
 
-    // Largest line index whose first visual row is <= [row].
-    int lineAtRow(int row) {
+    // Largest line index whose top is <= [y].
+    int lineAtY(double y) {
       var lo = 0;
       var hi = lineCount - 1;
       while (lo < hi) {
         final mid = (lo + hi + 1) >> 1;
-        if (rowStarts[mid] <= row) {
+        if (lineTops[mid] <= y) {
           lo = mid;
         } else {
           hi = mid - 1;
@@ -523,45 +637,130 @@ class _LineNumberGutter extends StatelessWidget {
       lastVisible = lineCount - 1;
     } else {
       const buffer = 4; // extra lines so fast flings don't show a blank edge
-      final topRow = (scrollOffset / lineHeight).floor();
-      final bottomRow = ((scrollOffset + viewportHeight!) / lineHeight).ceil();
-      firstVisible = (lineAtRow(topRow) - buffer).clamp(0, lineCount - 1);
-      lastVisible = (lineAtRow(bottomRow) + buffer).clamp(0, lineCount - 1);
+      firstVisible = (lineAtY(scrollOffset) - buffer).clamp(0, lineCount - 1);
+      lastVisible = (lineAtY(scrollOffset + viewportHeight!) + buffer)
+          .clamp(0, lineCount - 1);
+    }
+
+    final children = <Widget>[];
+    var hr = 0; // pointer into hiddenLines (sorted)
+    while (hr < hiddenLines.length && hiddenLines[hr].last < firstVisible) {
+      hr++;
+    }
+    for (var i = firstVisible; i <= lastVisible; i++) {
+      while (hr < hiddenLines.length && hiddenLines[hr].last < i) {
+        hr++;
+      }
+      if (hr < hiddenLines.length && hiddenLines[hr].first <= i) {
+        continue; // hidden by a fold: no number
+      }
+
+      final region = regionByStart[i];
+      final folded = region != null && isFolded(i);
+
+      Widget row = Row(
+        children: [
+          SizedBox(
+            width: chevronWidth,
+            child: region == null
+                ? null
+                : Icon(
+                    folded
+                        ? Icons.chevron_right_rounded
+                        : Icons.expand_more_rounded,
+                    size: fontSize,
+                    color: folded ? scheme.text : scheme.gutterText,
+                  ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(right: AppConstants.spaceSm),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '${i + 1}',
+                  style: TextStyle(
+                    fontFamily: editorFontFamily,
+                    fontSize: fontSize * 0.85,
+                    color: i == currentLine ? scheme.text : scheme.gutterText,
+                    fontWeight:
+                        i == currentLine ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+
+      if (region != null) {
+        // The whole gutter row (chevron + number) is the tap target —
+        // a 16px chevron alone is too small for a finger.
+        row = GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => onToggleFold(i),
+          child: row,
+        );
+      }
+
+      children.add(
+        Positioned(
+          // The number sits on the FIRST visual row of its line, so
+          // wrapped continuation rows get no number.
+          top: lineTops[i] - scrollOffset,
+          left: 0,
+          right: 0,
+          height: lineHeight,
+          child: row,
+        ),
+      );
     }
 
     return SizedBox(
       width: width,
       child: ColoredBox(
         color: scheme.gutterBackground,
-        child: Stack(
+        child: Stack(children: children),
+      ),
+    );
+  }
+}
+
+/// The small "..." marker shown after a folded line.
+class _FoldChip extends StatelessWidget {
+  final EditorColorScheme scheme;
+  final double lineHeight;
+  final VoidCallback onTap;
+
+  const _FoldChip({
+    required this.scheme,
+    required this.lineHeight,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
+        height: lineHeight,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            for (var i = firstVisible; i <= lastVisible; i++)
-              Positioned(
-                // The number sits on the FIRST visual row of its line,
-                // so wrapped continuation rows get no number.
-                top: (rowStarts[i] * lineHeight) - scrollOffset,
-                left: 0,
-                right: 0,
-                height: lineHeight,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: AppConstants.spaceSm),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      '${i + 1}',
-                      style: TextStyle(
-                        fontFamily: editorFontFamily,
-                        fontSize: fontSize * 0.85,
-                        color:
-                            i == currentLine ? scheme.text : scheme.gutterText,
-                        fontWeight: i == currentLine
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                      ),
-                    ),
-                  ),
-                ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              decoration: BoxDecoration(
+                color: scheme.selection.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(4),
               ),
+              child: Icon(
+                Icons.more_horiz_rounded,
+                size: lineHeight * 0.6,
+                color: scheme.text.withValues(alpha: 0.8),
+              ),
+            ),
           ],
         ),
       ),
@@ -573,14 +772,14 @@ class _ErrorLineHighlight extends StatelessWidget {
   final EditorColorScheme scheme;
   final double lineHeight;
   final int? errorLine;
-  final List<int> rowStarts;
+  final List<double> lineTops;
   final double scrollOffset;
 
   const _ErrorLineHighlight({
     required this.scheme,
     required this.lineHeight,
     required this.errorLine,
-    required this.rowStarts,
+    required this.lineTops,
     required this.scrollOffset,
   });
 
@@ -590,14 +789,16 @@ class _ErrorLineHighlight extends StatelessWidget {
     if (line == null || line < 1) return const SizedBox.shrink();
 
     final index = line - 1; // errorLine is 1-indexed
-    if (index >= rowStarts.length - 1) return const SizedBox.shrink();
+    if (index >= lineTops.length - 1) return const SizedBox.shrink();
 
-    final rows = rowStarts[index + 1] - rowStarts[index];
+    final height = lineTops[index + 1] - lineTops[index];
+    if (height < lineHeight * 0.5) return const SizedBox.shrink();
+
     return Positioned(
-      top: (rowStarts[index] * lineHeight) - scrollOffset,
+      top: lineTops[index] - scrollOffset,
       left: 0,
       right: 0,
-      height: rows * lineHeight,
+      height: height,
       child: IgnorePointer(
         child:
             ColoredBox(color: const Color(0xFFE06C75).withValues(alpha: 0.18)),
@@ -610,7 +811,7 @@ class _CurrentLineHighlight extends StatelessWidget {
   final EditorColorScheme scheme;
   final double lineHeight;
   final int currentLine;
-  final List<int> rowStarts;
+  final List<double> lineTops;
   final double scrollOffset;
   final bool hasSelection;
 
@@ -618,7 +819,7 @@ class _CurrentLineHighlight extends StatelessWidget {
     required this.scheme,
     required this.lineHeight,
     required this.currentLine,
-    required this.rowStarts,
+    required this.lineTops,
     required this.scrollOffset,
     required this.hasSelection,
   });
@@ -626,14 +827,16 @@ class _CurrentLineHighlight extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!hasSelection || currentLine < 0) return const SizedBox.shrink();
-    if (currentLine >= rowStarts.length - 1) return const SizedBox.shrink();
+    if (currentLine >= lineTops.length - 1) return const SizedBox.shrink();
 
-    final rows = rowStarts[currentLine + 1] - rowStarts[currentLine];
+    final height = lineTops[currentLine + 1] - lineTops[currentLine];
+    if (height < lineHeight * 0.5) return const SizedBox.shrink();
+
     return Positioned(
-      top: (rowStarts[currentLine] * lineHeight) - scrollOffset,
+      top: lineTops[currentLine] - scrollOffset,
       left: 0,
       right: 0,
-      height: rows * lineHeight,
+      height: height,
       child: IgnorePointer(
         child: ColoredBox(color: scheme.currentLine),
       ),

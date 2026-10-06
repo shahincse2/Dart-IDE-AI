@@ -290,6 +290,18 @@ class _EditorScreenState extends State<EditorScreen> {
     showGoToLineDialog(context, activeController);
   }
 
+  void _handleFoldAll() {
+    final path = _fileProvider.activeTab;
+    if (path == null) return;
+    _controllers[path]?.foldAll();
+  }
+
+  void _handleUnfoldAll() {
+    final path = _fileProvider.activeTab;
+    if (path == null) return;
+    _controllers[path]?.unfoldAll();
+  }
+
   void _handleInspect() {
     showModalBottomSheet(
       context: context,
@@ -357,6 +369,8 @@ class _EditorScreenState extends State<EditorScreen> {
                 })
             : null,
         onGoToLinePressed: activeController != null ? _handleGoToLine : null,
+        onFoldAllPressed: activeController != null ? _handleFoldAll : null,
+        onUnfoldAllPressed: activeController != null ? _handleUnfoldAll : null,
         onArgumentsPressed: activeController != null
             ? () async {
                 final current = _argsByPath[activePath]?.join(' ') ?? '';
@@ -450,6 +464,8 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onSavePressed;
   final VoidCallback? onFindPressed;
   final VoidCallback? onGoToLinePressed;
+  final VoidCallback? onFoldAllPressed;
+  final VoidCallback? onUnfoldAllPressed;
   final VoidCallback? onArgumentsPressed;
   final int argsCount;
   final bool wordWrap;
@@ -473,6 +489,8 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onSavePressed,
     required this.onFindPressed,
     required this.onGoToLinePressed,
+    required this.onFoldAllPressed,
+    required this.onUnfoldAllPressed,
     required this.onArgumentsPressed,
     required this.argsCount,
     required this.wordWrap,
@@ -543,6 +561,24 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
               child: const ListTile(
                 leading: Icon(Icons.arrow_forward_rounded),
                 title: Text('Go to line'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            PopupMenuItem(
+              enabled: onFoldAllPressed != null,
+              value: onFoldAllPressed,
+              child: const ListTile(
+                leading: Icon(Icons.unfold_less_rounded),
+                title: Text('Fold all'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            PopupMenuItem(
+              enabled: onUnfoldAllPressed != null,
+              value: onUnfoldAllPressed,
+              child: const ListTile(
+                leading: Icon(Icons.unfold_more_rounded),
+                title: Text('Unfold all'),
                 contentPadding: EdgeInsets.zero,
               ),
             ),
