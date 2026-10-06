@@ -123,7 +123,8 @@ class _CodeEditorState extends State<CodeEditor> {
     final viewBottom = viewTop + viewportHeight;
 
     if (lineTop < viewTop) {
-      _scrollController.animateTo(lineTop, duration: AppConstants.animFast, curve: Curves.easeOut);
+      _scrollController.animateTo(lineTop,
+          duration: AppConstants.animFast, curve: Curves.easeOut);
     } else if (lineBottom > viewBottom) {
       _scrollController.animateTo(
         lineBottom - viewportHeight,
@@ -154,7 +155,9 @@ class _CodeEditorState extends State<CodeEditor> {
 
   double _gutterWidthFor(int lineCount) {
     final digits = lineCount.toString().length;
-    return (digits * widget.fontSize * 0.62) + AppConstants.spaceMd + AppConstants.spaceXs;
+    return (digits * widget.fontSize * 0.62) +
+        AppConstants.spaceMd +
+        AppConstants.spaceXs;
   }
 
   /// Rough monospace-character-width estimate for the longest line —
@@ -174,9 +177,11 @@ class _CodeEditorState extends State<CodeEditor> {
     final scheme = widget.controller.scheme;
     final lineCount = _lineCountOf(widget.controller.text);
     final currentLine = _currentLineIndex();
-    final scrollOffset = _scrollController.hasClients ? _scrollController.offset : 0.0;
-    final viewportHeight =
-        _scrollController.hasClients ? _scrollController.position.viewportDimension : null;
+    final scrollOffset =
+        _scrollController.hasClients ? _scrollController.offset : 0.0;
+    final viewportHeight = _scrollController.hasClients
+        ? _scrollController.position.viewportDimension
+        : null;
     final gutterWidth = _gutterWidthFor(lineCount);
 
     return ColoredBox(
@@ -194,7 +199,8 @@ class _CodeEditorState extends State<CodeEditor> {
             scrollOffset: scrollOffset,
             viewportHeight: viewportHeight,
           ),
-          Container(width: 0.5, color: scheme.gutterText.withValues(alpha: 0.15)),
+          Container(
+              width: 0.5, color: scheme.gutterText.withValues(alpha: 0.15)),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -215,7 +221,8 @@ class _CodeEditorState extends State<CodeEditor> {
                           widget.controller.selection.isCollapsed,
                     ),
                     Padding(
-                      padding: const EdgeInsets.only(left: AppConstants.spaceSm),
+                      padding:
+                          const EdgeInsets.only(left: AppConstants.spaceSm),
                       child: TextField(
                         controller: widget.controller,
                         scrollController: _scrollController,
@@ -260,7 +267,8 @@ class _CodeEditorState extends State<CodeEditor> {
                 // outside this scroll view (see the Row above), so line
                 // numbers remain visible while code scrolls under them.
                 final contentWidth = [
-                  _longestLineWidth(widget.controller.text) + AppConstants.spaceLg,
+                  _longestLineWidth(widget.controller.text) +
+                      AppConstants.spaceLg,
                   constraints.maxWidth,
                 ].reduce((a, b) => a > b ? a : b);
 
@@ -319,9 +327,11 @@ class _LineNumberGutter extends StatelessWidget {
       firstVisible = 0;
       lastVisible = lineCount - 1;
     } else {
-      const buffer = 4; // extra lines above/below so fast flings don't show a blank edge
+      const buffer =
+          4; // extra lines above/below so fast flings don't show a blank edge
       firstVisible = (scrollOffset / lineHeight).floor() - buffer;
-      lastVisible = ((scrollOffset + viewportHeight!) / lineHeight).ceil() + buffer;
+      lastVisible =
+          ((scrollOffset + viewportHeight!) / lineHeight).ceil() + buffer;
       firstVisible = firstVisible.clamp(0, lineCount - 1);
       lastVisible = lastVisible.clamp(0, lineCount - 1);
     }
@@ -347,8 +357,11 @@ class _LineNumberGutter extends StatelessWidget {
                       style: TextStyle(
                         fontFamily: editorFontFamily,
                         fontSize: fontSize * 0.85,
-                        color: i == currentLine ? scheme.text : scheme.gutterText,
-                        fontWeight: i == currentLine ? FontWeight.w600 : FontWeight.normal,
+                        color:
+                            i == currentLine ? scheme.text : scheme.gutterText,
+                        fontWeight: i == currentLine
+                            ? FontWeight.w600
+                            : FontWeight.normal,
                       ),
                     ),
                   ),
@@ -379,14 +392,16 @@ class _ErrorLineHighlight extends StatelessWidget {
     final line = errorLine;
     if (line == null || line < 1) return const SizedBox.shrink();
 
-    final top = ((line - 1) * lineHeight) - scrollOffset; // errorLine is 1-indexed
+    final top =
+        ((line - 1) * lineHeight) - scrollOffset; // errorLine is 1-indexed
     return Positioned(
       top: top,
       left: 0,
       right: 0,
       height: lineHeight,
       child: IgnorePointer(
-        child: ColoredBox(color: const Color(0xFFE06C75).withValues(alpha: 0.18)),
+        child:
+            ColoredBox(color: const Color(0xFFE06C75).withValues(alpha: 0.18)),
       ),
     );
   }

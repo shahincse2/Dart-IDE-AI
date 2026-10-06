@@ -674,32 +674,36 @@ class _EditorBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final controller = this.controller;
+    final undoController = this.undoController;
+
     return Column(
       children: [
         const FileTabBar(),
         if (showFindReplace && controller != null)
           FindReplaceBar(
             key: ValueKey(controller),
-            controller: controller!,
+            controller: controller,
             onClose: onCloseFindReplace,
             initiallyExpanded: findReplaceExpanded,
           ),
         Expanded(
           child: controller != null
               ? CodeEditor(
-                  controller: controller!,
+                  controller: controller,
                   undoController: undoController,
                   fontSize: fontSize,
                   wordWrap: wordWrap,
                 )
               : const _NoFileOpenPlaceholder(),
         ),
-        if (controller != null && undoController != null)
-          if (controller != null) CompletionOverlay(controller: controller!),
-        CodingToolbar(
-          controller: controller!,
-          undoController: undoController!,
-        ),
+        if (controller != null && undoController != null) ...[
+          CompletionOverlay(controller: controller),
+          CodingToolbar(
+            controller: controller,
+            undoController: undoController,
+          ),
+        ],
         const ConsolePanel(),
       ],
     );
