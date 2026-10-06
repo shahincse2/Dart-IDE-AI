@@ -32,7 +32,7 @@ class CompletionEngine {
     ),
     CompletionItem(
       label: 'print',
-      insertText: "print('')",
+      insertText: "print('');",
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
@@ -62,7 +62,8 @@ class CompletionEngine {
     ),
     CompletionItem(
       label: 'switch',
-      insertText: 'switch () {\n  case :\n    break;\n  default:\n    break;\n}',
+      insertText:
+          'switch () {\n  case :\n    break;\n  default:\n    break;\n}',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
@@ -99,6 +100,11 @@ class CompletionEngine {
       label: 'import',
       insertText: "import '';",
       kind: CompletionKind.keyword,
+    ),
+    CompletionItem(
+      label: 'package',
+      insertText: 'package: ',
+      kind: CompletionKind.snippet,
     ),
     CompletionItem(
       label: 'async',
@@ -152,7 +158,52 @@ class CompletionEngine {
     ),
     CompletionItem(
       label: 'readLineSync',
-      insertText: 'await readLineSync()',
+      insertText: 'await readLineSync();',
+      kind: CompletionKind.snippet,
+    ),
+    CompletionItem(
+      label: 'stdin',
+      insertText: 'stdin',
+      kind: CompletionKind.snippet,
+    ),
+    CompletionItem(
+      label: 'stdout',
+      insertText: 'stdout',
+      kind: CompletionKind.snippet,
+    ),
+    CompletionItem(
+      label: 'stdin.readLineSync',
+      insertText: 'await readLineSync();',
+      kind: CompletionKind.snippet,
+    ),
+    CompletionItem(
+      label: 'stdout.write',
+      insertText: 'write()',
+      kind: CompletionKind.snippet,
+    ),
+    CompletionItem(
+      label: 'stdout.writeln',
+      insertText: 'writeln()',
+      kind: CompletionKind.snippet,
+    ),
+    CompletionItem(
+      label: 'stdout.writeLine',
+      insertText: 'writeln()',
+      kind: CompletionKind.snippet,
+    ),
+    CompletionItem(
+      label: 'stdout.writeLineSync',
+      insertText: 'writeln()',
+      kind: CompletionKind.snippet,
+    ),
+    CompletionItem(
+      label: 'stdout.writeSync',
+      insertText: 'write()',
+      kind: CompletionKind.snippet,
+    ),
+    CompletionItem(
+      label: 'stdout.write',
+      insertText: 'write()',
       kind: CompletionKind.snippet,
     ),
   ];

@@ -7,12 +7,12 @@ import '../models/console_event.dart';
 import '../providers/file_provider.dart';
 import '../providers/runner_provider.dart';
 import '../providers/settings_provider.dart';
+import '../screens/git_screen.dart';
 import '../services/file_share_service.dart';
 import '../services/print_service.dart';
 import '../utils/constants.dart';
 import '../utils/runner_error_parser.dart';
 import '../utils/themes.dart';
-import '../widgets/arguments_dialog.dart';
 import '../widgets/code_editor.dart';
 import '../widgets/code_editor_controller.dart';
 import '../widgets/coding_toolbar.dart';
@@ -311,6 +311,21 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
+  void _handleGit() {
+    final activePath = _fileProvider.activeTab;
+    final activeController =
+        activePath != null ? _controllers[activePath] : null;
+    if (activeController == null || activePath == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => GitScreen(
+          fileContent: activeController.text,
+          fileName: activePath.split('/').last,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
@@ -371,15 +386,6 @@ class _EditorScreenState extends State<EditorScreen> {
         onGoToLinePressed: activeController != null ? _handleGoToLine : null,
         onFoldAllPressed: activeController != null ? _handleFoldAll : null,
         onUnfoldAllPressed: activeController != null ? _handleUnfoldAll : null,
-        onArgumentsPressed: activeController != null
-            ? () async {
-                final current = _argsByPath[activePath]?.join(' ') ?? '';
-                final result = await showArgumentsDialog(context, current);
-                if (result != null) {
-                  setState(() => _argsByPath[activePath!] = result);
-                }
-              }
-            : null,
         argsCount:
             activePath != null ? (_argsByPath[activePath]?.length ?? 0) : 0,
         wordWrap: settings.wordWrap,
@@ -397,6 +403,7 @@ class _EditorScreenState extends State<EditorScreen> {
         onSettingsPressed: () => Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
+        onGitPressed: activeController != null ? _handleGit : null,
       ),
       drawer: useSidebar ? null : const Drawer(child: FileTreeView()),
       body: SafeArea(
@@ -466,7 +473,6 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onGoToLinePressed;
   final VoidCallback? onFoldAllPressed;
   final VoidCallback? onUnfoldAllPressed;
-  final VoidCallback? onArgumentsPressed;
   final int argsCount;
   final bool wordWrap;
   final VoidCallback onToggleWordWrap;
@@ -479,6 +485,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onShareCodePressed;
   final VoidCallback? onPrintPressed;
   final VoidCallback? onSharePdfPressed;
+  final VoidCallback? onGitPressed;
 
   const _EditorAppBar({
     required this.fileName,
@@ -491,7 +498,6 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onGoToLinePressed,
     required this.onFoldAllPressed,
     required this.onUnfoldAllPressed,
-    required this.onArgumentsPressed,
     required this.argsCount,
     required this.wordWrap,
     required this.onToggleWordWrap,
@@ -504,6 +510,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onShareCodePressed,
     required this.onPrintPressed,
     required this.onSharePdfPressed,
+    required this.onGitPressed,
   });
 
   @override
@@ -590,17 +597,6 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
                 contentPadding: EdgeInsets.zero,
               ),
             ),
-            PopupMenuItem(
-              enabled: onArgumentsPressed != null,
-              value: onArgumentsPressed,
-              child: ListTile(
-                leading: const Icon(Icons.terminal_rounded),
-                title: Text(
-                  argsCount > 0 ? 'Arguments ($argsCount)' : 'Arguments',
-                ),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
             CheckedPopupMenuItem<VoidCallback>(
               value: onToggleWordWrap,
               checked: wordWrap,
@@ -667,6 +663,15 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
               child: const ListTile(
                 leading: Icon(Icons.manage_search_rounded),
                 title: Text('Inspect variables'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            PopupMenuItem(
+              enabled: onGitPressed != null,
+              value: onGitPressed,
+              child: const ListTile(
+                leading: Icon(Icons.cloud_upload_outlined),
+                title: Text('Push to GitHub / GitLab'),
                 contentPadding: EdgeInsets.zero,
               ),
             ),
