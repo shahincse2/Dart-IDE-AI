@@ -231,32 +231,77 @@ class _OutputList extends StatefulWidget {
 class _OutputListState extends State<_OutputList> {
   final _scrollController = ScrollController();
 
+  /// How many events the list held the last time it was updated.
+  ///
+  /// The old auto-scroll compared `widget.runner.events.length` with
+  /// `oldWidget.runner.events.length`. Both widgets hold the SAME
+  /// RunnerProvider object, so the two lengths were always equal and the
+  /// scroll never ran. Remembering the count in the State fixes that.
+  int _lastCount = 0;
+
+  /// "At the bottom" tolerance in pixels.
+  static const double _bottomTolerance = 48;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastCount = widget.runner.events.length;
+    // Console re-opened with output already in it: show the latest lines.
+    if (_lastCount > 0) _scrollToBottom();
+  }
+
   @override
   void dispose() {
     _scrollController.dispose();
     super.dispose();
   }
 
+  bool get _isNearBottom {
+    if (!_scrollController.hasClients) return true;
+    final p = _scrollController.position;
+    return p.pixels >= p.maxScrollExtent - _bottomTolerance;
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+
+      // ListView.builder only ESTIMATES the extent of rows it has not laid
+      // out yet, so settle once more on the next frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) return;
+        final p = _scrollController.position;
+        if (p.pixels < p.maxScrollExtent) p.jumpTo(p.maxScrollExtent);
+      });
+    });
+  }
+
   @override
   void didUpdateWidget(covariant _OutputList oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Auto-scroll to bottom when new output arrives.
-    if (widget.runner.events.length != oldWidget.runner.events.length) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: AppConstants.animFast,
-            curve: Curves.easeOut,
-          );
-        }
-      });
+    final count = widget.runner.events.length;
+
+    if (count < _lastCount) {
+      // Output was cleared / a new run started: the list is back at the top.
+      _lastCount = count;
+      return;
+    }
+
+    if (count > _lastCount) {
+      // Decide BEFORE the new rows are laid out: if the user has scrolled
+      // up to read earlier output, leave them where they are.
+      final follow = _isNearBottom;
+      _lastCount = count;
+      if (follow) _scrollToBottom();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.runner.events.isEmpty) {
+    final events = widget.runner.events;
+
+    if (events.isEmpty) {
       return Center(
         child: Text(
           widget.runner.isRunning
@@ -271,9 +316,9 @@ class _OutputListState extends State<_OutputList> {
       controller: _scrollController,
       padding: const EdgeInsets.symmetric(
           horizontal: AppConstants.spaceMd, vertical: AppConstants.spaceSm),
-      itemCount: widget.runner.events.length,
+      itemCount: events.length,
       itemBuilder: (context, i) =>
-          _OutputRow(event: widget.runner.events[i], scheme: widget.scheme),
+          _OutputRow(event: events[i], scheme: widget.scheme),
     );
   }
 }
