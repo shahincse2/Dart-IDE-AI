@@ -92,7 +92,7 @@ class _CompletionOverlayState extends State<CompletionOverlay> {
         padding: const EdgeInsets.symmetric(horizontal: AppConstants.spaceSm),
         itemCount: _suggestions.length,
         separatorBuilder: (_, __) =>
-            VerticalDivider(width: 1, color: scheme.gutterText.withOpacity(0.2)),
+            VerticalDivider(width: 1, color: scheme.gutterText.withValues(alpha: 0.2)),
         itemBuilder: (context, i) {
           final item = _suggestions[i];
           return _SuggestionChip(
@@ -137,7 +137,7 @@ class _SuggestionChip extends StatelessWidget {
                   ? Icons.code_rounded
                   : Icons.text_fields_rounded,
               size: 12,
-              color: color.withOpacity(0.7),
+              color: color.withValues(alpha: 0.7),
             ),
             const SizedBox(width: 4),
             Text(

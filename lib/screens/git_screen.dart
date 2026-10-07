@@ -130,11 +130,12 @@ class _GitProviderPanelState extends State<_GitProviderPanel> {
 
   Future<void> _disconnect() async {
     await _service.clearToken(widget.provider);
-    if (mounted)
+    if (mounted) {
       setState(() {
         _token = null;
         _username = null;
       });
+    }
   }
 
   @override

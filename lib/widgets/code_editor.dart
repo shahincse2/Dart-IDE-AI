@@ -438,8 +438,9 @@ class _CodeEditorState extends State<CodeEditor> {
             for (final s in ctrl.foldedStartLines) {
               final region = _regionByStart[s];
               if (region == null) continue;
-              if (_isLineHidden(s, hiddenLines))
+              if (_isLineHidden(s, hiddenLines)) {
                 continue; // inside an outer fold
+              }
               final p = s + 1; // placeholder row = first hidden line
               if (p + 1 >= lineTops.length || p >= _lines.length) continue;
 
