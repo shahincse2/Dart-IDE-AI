@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:provider/provider.dart';
@@ -24,7 +26,7 @@ class ConsolePanel extends StatelessWidget {
     final console = context.watch<ConsoleProvider>();
     final runner = context.watch<RunnerProvider>();
     final themeName =
-        context.select<SettingsProvider, String>((s) => s.editorThemeName);
+    context.select<SettingsProvider, String>((s) => s.editorThemeName);
     final scheme = editorSchemeFromName(themeName);
     final maxHeight = MediaQuery.sizeOf(context).height * 0.7;
 
@@ -43,11 +45,11 @@ class ConsolePanel extends StatelessWidget {
       clipBehavior: Clip.hardEdge,
       child: console.isOpen
           ? _ConsoleContent(
-              console: console,
-              runner: runner,
-              scheme: scheme,
-              maxHeight: maxHeight,
-            )
+        console: console,
+        runner: runner,
+        scheme: scheme,
+        maxHeight: maxHeight,
+      )
           : null,
     );
   }
@@ -132,13 +134,13 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget action(String tip, IconData icon, VoidCallback onTap) => IconButton(
-          tooltip: tip,
-          icon: Icon(icon, size: 18, color: scheme.gutterText),
-          padding: EdgeInsets.zero,
-          visualDensity: VisualDensity.compact,
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          onPressed: onTap,
-        );
+      tooltip: tip,
+      icon: Icon(icon, size: 18, color: scheme.gutterText),
+      padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      onPressed: onTap,
+    );
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -218,6 +220,47 @@ class _Header extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------
+// Output list
+//
+// Why every row has the SAME fixed height (`itemExtent`):
+// a lazy ListView whose rows have different heights cannot know where row
+// N starts without laying out every row before it. So every big jump —
+// the auto-scroll to the newest line, or dragging the scrollbar through a
+// few thousand lines — forced Flutter to lay out all the rows in between
+// (seconds in a debug build), and the UI froze. With a fixed extent a jump
+// is O(1).
+//
+// To make that possible:
+//   * an event that spans several lines (stack traces, "a\nb") is split
+//     into one row per line;
+//   * a row never wraps. Long lines are scrolled horizontally instead.
+// ---------------------------------------------------------------------
+
+const double _kRowExtent = 22;
+const double _kFontSize = 12.5;
+
+/// Longer lines are cut off (with an ellipsis) — a single multi-megabyte
+/// line would be slow to lay out.
+const int _kMaxLineChars = 2000;
+
+/// One physical line of console output.
+class _ConsoleLine {
+  final ConsoleEventType type;
+  final String text;
+
+  /// First line of its event: only this row shows the icon / `stderr` label.
+  final bool isFirst;
+  final int? exitCode;
+
+  const _ConsoleLine({
+    required this.type,
+    required this.text,
+    required this.isFirst,
+    this.exitCode,
+  });
+}
+
 class _OutputList extends StatefulWidget {
   final RunnerProvider runner;
   final EditorColorScheme scheme;
@@ -231,13 +274,18 @@ class _OutputList extends StatefulWidget {
 class _OutputListState extends State<_OutputList> {
   final _scrollController = ScrollController();
 
-  /// How many events the list held the last time it was updated.
-  ///
-  /// The old auto-scroll compared `widget.runner.events.length` with
-  /// `oldWidget.runner.events.length`. Both widgets hold the SAME
-  /// RunnerProvider object, so the two lengths were always equal and the
-  /// scroll never ran. Remembering the count in the State fixes that.
-  int _lastCount = 0;
+  /// Flattened one-row-per-line view of the runner's events.
+  final List<_ConsoleLine> _lines = [];
+
+  /// How many of the runner's events have been flattened so far. (The old
+  /// auto-scroll compared `widget.runner.events.length` with
+  /// `oldWidget.runner.events.length`; both widgets hold the SAME
+  /// RunnerProvider, so the lengths were always equal and it never ran.)
+  int _consumed = 0;
+
+  /// Longest line seen, in characters — sizes the horizontal scroll area.
+  int _maxChars = 0;
+  double? _charWidth;
 
   /// "At the bottom" tolerance in pixels.
   static const double _bottomTolerance = 48;
@@ -245,9 +293,9 @@ class _OutputListState extends State<_OutputList> {
   @override
   void initState() {
     super.initState();
-    _lastCount = widget.runner.events.length;
+    _consume();
     // Console re-opened with output already in it: show the latest lines.
-    if (_lastCount > 0) _scrollToBottom();
+    if (_lines.isNotEmpty) _scrollToBottom();
   }
 
   @override
@@ -255,6 +303,55 @@ class _OutputListState extends State<_OutputList> {
     _scrollController.dispose();
     super.dispose();
   }
+
+  // ---- events -> lines -------------------------------------------------
+
+  void _consume() {
+    final events = widget.runner.events;
+    if (events.length < _consumed) {
+      // Output was cleared / a new run started.
+      _lines.clear();
+      _consumed = 0;
+      _maxChars = 0;
+    }
+    for (var i = _consumed; i < events.length; i++) {
+      _addEvent(events[i]);
+    }
+    _consumed = events.length;
+  }
+
+  void _noteWidth(int chars) {
+    if (chars > _maxChars) _maxChars = chars;
+  }
+
+  void _addEvent(ConsoleEvent e) {
+    if (e.type == ConsoleEventType.exitCode) {
+      final text = 'Program finished (exit code ${e.exitCode})';
+      _lines.add(_ConsoleLine(
+        type: e.type,
+        text: text,
+        isFirst: true,
+        exitCode: e.exitCode,
+      ));
+      _noteWidth(text.length);
+      return;
+    }
+
+    final pieces = (e.text ?? '').split('\n');
+    for (var k = 0; k < pieces.length; k++) {
+      var t = pieces[k];
+      if (t.endsWith('\r')) t = t.substring(0, t.length - 1);
+      if (t.length > _kMaxLineChars) {
+        t = '${t.substring(0, _kMaxLineChars)}…';
+      }
+      final first = k == 0;
+      _lines.add(_ConsoleLine(type: e.type, text: t, isFirst: first));
+      // "stderr  " label takes 8 characters on the first row.
+      _noteWidth(t.length + (first && e.type == ConsoleEventType.stderr ? 8 : 0));
+    }
+  }
+
+  // ---- scrolling ---------------------------------------------------------
 
   bool get _isNearBottom {
     if (!_scrollController.hasClients) return true;
@@ -266,42 +363,50 @@ class _OutputListState extends State<_OutputList> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
       _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-
-      // ListView.builder only ESTIMATES the extent of rows it has not laid
-      // out yet, so settle once more on the next frame.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_scrollController.hasClients) return;
-        final p = _scrollController.position;
-        if (p.pixels < p.maxScrollExtent) p.jumpTo(p.maxScrollExtent);
-      });
     });
   }
 
   @override
   void didUpdateWidget(covariant _OutputList oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final count = widget.runner.events.length;
 
-    if (count < _lastCount) {
-      // Output was cleared / a new run started: the list is back at the top.
-      _lastCount = count;
-      return;
-    }
+    // Decide BEFORE the new rows are laid out: if the user has scrolled up
+    // to read earlier output, leave them where they are.
+    final follow = _isNearBottom;
+    final before = _lines.length;
+    final cleared = widget.runner.events.length < _consumed;
 
-    if (count > _lastCount) {
-      // Decide BEFORE the new rows are laid out: if the user has scrolled
-      // up to read earlier output, leave them where they are.
-      final follow = _isNearBottom;
-      _lastCount = count;
-      if (follow) _scrollToBottom();
-    }
+    _consume();
+
+    if (!cleared && _lines.length > before && follow) _scrollToBottom();
+  }
+
+  // ---- layout ------------------------------------------------------------
+
+  double _measureCharWidth() {
+    final tp = TextPainter(
+      // (not `const`: editorFontFamily is not guaranteed to be a constant)
+      text: TextSpan(
+        text: 'MMMMMMMMMM',
+        style: TextStyle(fontFamily: editorFontFamily, fontSize: _kFontSize),
+      ),
+      textDirection: TextDirection.ltr,
+      textScaler: TextScaler.noScaling,
+    )..layout();
+    final w = tp.width / 10;
+    tp.dispose();
+    return w;
+  }
+
+  double _contentWidth() {
+    final charWidth = _charWidth ??= _measureCharWidth();
+    const rowChrome = 2 * AppConstants.spaceMd + 13 + AppConstants.spaceSm + 8;
+    return _maxChars * charWidth + rowChrome;
   }
 
   @override
   Widget build(BuildContext context) {
-    final events = widget.runner.events;
-
-    if (events.isEmpty) {
+    if (_lines.isEmpty) {
       return Center(
         child: Text(
           widget.runner.isRunning
@@ -312,64 +417,77 @@ class _OutputListState extends State<_OutputList> {
       );
     }
 
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppConstants.spaceMd, vertical: AppConstants.spaceSm),
-      itemCount: events.length,
-      itemBuilder: (context, i) =>
-          _OutputRow(event: events[i], scheme: widget.scheme),
+    // System font scaling would make text taller than the fixed row height.
+    return MediaQuery.withNoTextScaling(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = math.max(constraints.maxWidth, _contentWidth());
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: width,
+              height: constraints.maxHeight,
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.spaceMd,
+                  vertical: AppConstants.spaceSm,
+                ),
+                itemExtent: _kRowExtent,
+                itemCount: _lines.length,
+                itemBuilder: (context, i) =>
+                    _OutputRow(line: _lines[i], scheme: widget.scheme),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
 
 class _OutputRow extends StatelessWidget {
-  final ConsoleEvent event;
+  final _ConsoleLine line;
   final EditorColorScheme scheme;
 
-  const _OutputRow({required this.event, required this.scheme});
+  const _OutputRow({required this.line, required this.scheme});
 
   @override
   Widget build(BuildContext context) {
     final IconData icon;
     final Color color;
-    final String text;
     String? label;
 
-    switch (event.type) {
+    switch (line.type) {
       case ConsoleEventType.stdout:
         icon = Icons.chevron_right_rounded;
         color = scheme.text;
-        text = event.text ?? '';
       case ConsoleEventType.stderr:
         icon = Icons.error_outline_rounded;
         color = const Color(0xFFE06C75);
-        text = event.text ?? '';
         label = 'stderr';
       case ConsoleEventType.systemInfo:
         icon = Icons.info_outline_rounded;
         color = scheme.gutterText;
-        text = event.text ?? '';
       case ConsoleEventType.exitCode:
-        final success = event.exitCode == 0;
+        final success = line.exitCode == 0;
         icon = success
             ? Icons.check_circle_outline_rounded
             : Icons.cancel_outlined;
         color = success ? const Color(0xFF6FCF97) : const Color(0xFFE06C75);
-        text = 'Program finished (exit code ${event.exitCode})';
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+    return SizedBox(
+      height: _kRowExtent,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Icon(icon, size: 13, color: color),
+          SizedBox(
+            width: 13,
+            child: line.isFirst ? Icon(icon, size: 13, color: color) : null,
           ),
           const SizedBox(width: AppConstants.spaceSm),
-          if (label != null)
+          if (label != null && line.isFirst)
             Text(
               '$label  ',
               style: TextStyle(
@@ -380,11 +498,14 @@ class _OutputRow extends StatelessWidget {
             ),
           Expanded(
             child: Text(
-              text,
+              line.text,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                   color: color,
                   fontFamily: editorFontFamily,
-                  fontSize: 12.5,
+                  fontSize: _kFontSize,
                   height: 1.4),
             ),
           ),

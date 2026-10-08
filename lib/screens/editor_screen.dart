@@ -329,7 +329,7 @@ class _EditorScreenState extends State<EditorScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
-    final runner = context.watch<RunnerProvider>();
+    final isRunning = context.select<RunnerProvider, bool>((r) => r.isRunning);
     final fileProvider = context.watch<FileProvider>();
 
     // Every open controller stays in sync with live settings, not just
@@ -370,7 +370,7 @@ class _EditorScreenState extends State<EditorScreen> {
         fileName: fileProvider.activeFileName ?? 'No file open',
         isDirty: activePath != null && fileProvider.isDirty(activePath),
         useSidebar: useSidebar,
-        isRunning: runner.isRunning,
+        isRunning: isRunning,
         onRunPressed: activeController == null ? null : _handleRunOrStop,
         onSavePressed: activeController != null ? _handleSave : null,
         onFindPressed: activeController != null
