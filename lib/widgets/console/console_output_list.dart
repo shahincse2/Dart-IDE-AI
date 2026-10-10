@@ -2,17 +2,20 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../models/console_event.dart';
 import '../../providers/runner_provider.dart';
 import '../../utils/constants.dart';
 import '../../utils/themes.dart';
 import 'console_line_builder.dart';
+import 'console_metrics.dart';
 import 'console_output_row.dart';
+import 'pixel_row_splitter.dart';
 
 /// The scrolling output area of the console.
 ///
 /// Rows have a fixed height (`itemExtent`), so jumping to the newest line
 /// or dragging the scrollbar through thousands of lines costs the same as
-/// moving one row. Long text is wrapped into several rows by
+/// moving one row. Long text is cut into several rows by
 /// [ConsoleLineBuilder] to fit the current width.
 class ConsoleOutputList extends StatefulWidget {
   const ConsoleOutputList({
@@ -34,7 +37,8 @@ class _ConsoleOutputListState extends State<ConsoleOutputList> {
 
   final _scrollController = ScrollController();
   final _builder = ConsoleLineBuilder();
-  double? _charWidth;
+
+  ConsoleMetrics? _metrics;
 
   @override
   void dispose() {
@@ -55,31 +59,31 @@ class _ConsoleOutputListState extends State<ConsoleOutputList> {
     });
   }
 
-  double _measureCharWidth() {
-    final painter = TextPainter(
-      // (not const: editorFontFamily is not guaranteed to be a constant)
-      text: TextSpan(
-        text: 'MMMMMMMMMM',
-        style: TextStyle(
-            fontFamily: editorFontFamily, fontSize: kConsoleFontSize),
-      ),
-      textDirection: TextDirection.ltr,
-      textScaler: TextScaler.noScaling,
-    )..layout();
-    final width = painter.width / 10;
-    painter.dispose();
-    return width;
-  }
-
-  /// How many characters of text fit on one row.
-  int _columnsFor(double width) {
-    final charWidth = _charWidth ??= _measureCharWidth();
-    final usable = width -
+  /// Tells the builder how to cut rows for the current width. A short
+  /// plain-ASCII line cannot be wider than "length x widest glyph", so it
+  /// needs no measuring at all; everything else asks the text engine.
+  void _configureBuilder(double width) {
+    final metrics = _metrics ??= ConsoleMetrics.measure();
+    final glyph = metrics.widestGlyph;
+    final style = consoleTextStyle();
+    final room = width -
         2 * AppConstants.spaceMd -
         kConsoleIconWidth -
-        AppConstants.spaceSm -
-        kConsoleLabelChars * charWidth;
-    return math.max(8, (usable / charWidth).floor());
+        AppConstants.spaceSm;
+
+    _builder.configure(
+      layoutKey: room.round(),
+      splitter: (text, type) {
+        final available = math.max(
+          glyph * 4,
+          type == ConsoleEventType.stderr ? room - metrics.labelWidth : room,
+        );
+        if (isPlainAscii(text) && text.length * glyph <= available) {
+          return [text];
+        }
+        return splitByPixels(text, style, available);
+      },
+    );
   }
 
   @override
@@ -102,11 +106,12 @@ class _ConsoleOutputListState extends State<ConsoleOutputList> {
     return MediaQuery.withNoTextScaling(
       child: LayoutBuilder(
         builder: (context, constraints) {
+          _configureBuilder(constraints.maxWidth);
           // Decided before the new rows are laid out: a user who scrolled
           // up to read earlier output is left where they are.
           final follow = _isNearBottom;
           final before = _builder.lines.length;
-          _builder.update(events, columns: _columnsFor(constraints.maxWidth));
+          _builder.update(events);
           final lines = _builder.lines;
           if (follow && lines.length != before) _scrollToBottom();
 
@@ -118,8 +123,11 @@ class _ConsoleOutputListState extends State<ConsoleOutputList> {
             ),
             itemExtent: kConsoleRowExtent,
             itemCount: lines.length,
-            itemBuilder: (context, i) =>
-                ConsoleOutputRow(line: lines[i], scheme: widget.scheme),
+            itemBuilder: (context, i) => ConsoleOutputRow(
+              line: lines[i],
+              scheme: widget.scheme,
+              labelWidth: _metrics!.labelWidth,
+            ),
           );
         },
       ),

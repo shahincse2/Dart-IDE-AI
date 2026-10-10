@@ -32,9 +32,8 @@ class ConsoleIoSource {
 
   static const _allowedNames = {'stdin', 'stdout', 'stderr'};
 
-  static const _sandboxNote = 'DartLab runs programs in a sandbox: from '
-      'dart:io only stdin, stdout and stderr are available. File, network '
-      'and process access is switched off for your safety.';
+  static const _sandboxNote =
+      'DartLab runs programs in a sandbox: from dart:io only stdin, stdout and stderr are available. File, network and process access is switched off for your safety.';
 
   static final _dartIoImport = RegExp(
     r'''^[ \t]*import\s+['"]dart:io['"]([^;]*);''',
@@ -107,7 +106,8 @@ class ConsoleIoSource {
     final code = source.replaceAll(_commentsAndStrings, ' ');
     final hit = _unsupportedUse.firstMatch(code);
     if (hit == null) return null;
-    return '$_sandboxNote (Not available: ${hit.group(0)!.trim()})';
+    final name = hit.group(0)!.replaceAll(RegExp(r'[\s.(]+$'), '');
+    return '$_sandboxNote (Not available: $name)';
   }
 
   static String _removeImports(String code) =>

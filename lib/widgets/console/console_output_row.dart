@@ -10,22 +10,39 @@ const double kConsoleRowExtent = 22;
 const double kConsoleFontSize = 12.5;
 const double kConsoleIconWidth = 13;
 
-/// Room kept free on every row for the `stderr  ` label.
-const int kConsoleLabelChars = 8;
+/// The fonts rows are drawn AND measured with. `inherit: false` makes sure
+/// the row's `Text` adds nothing from the surrounding theme (letter spacing,
+/// for example), so what was measured is exactly what is drawn.
+TextStyle consoleTextStyle() => TextStyle(
+    inherit: false, fontFamily: editorFontFamily, fontSize: kConsoleFontSize);
 
-/// One row of console output: icon (first row of an event only), optional
-/// `stderr` label, and the text on a single line.
+TextStyle consoleLabelStyle() => TextStyle(
+    inherit: false,
+    fontFamily: editorFontFamily,
+    fontSize: 12,
+    fontWeight: FontWeight.w600);
+
+/// One row of console output: icon (first row of an event only), the
+/// `stderr` label column for error rows, and the text on a single line.
 class ConsoleOutputRow extends StatelessWidget {
-  const ConsoleOutputRow({super.key, required this.line, required this.scheme});
+  const ConsoleOutputRow({
+    super.key,
+    required this.line,
+    required this.scheme,
+    required this.labelWidth,
+  });
 
   final ConsoleLine line;
   final EditorColorScheme scheme;
+
+  /// Width of the label column of `stderr` rows. Every row of an error keeps
+  /// it, so wrapped lines line up under the first one.
+  final double labelWidth;
 
   @override
   Widget build(BuildContext context) {
     final IconData icon;
     final Color color;
-    String? label;
 
     switch (line.type) {
       case ConsoleEventType.stdout:
@@ -34,7 +51,6 @@ class ConsoleOutputRow extends StatelessWidget {
       case ConsoleEventType.stderr:
         icon = Icons.error_outline_rounded;
         color = const Color(0xFFE06C75);
-        label = 'stderr';
       case ConsoleEventType.systemInfo:
         icon = Icons.info_outline_rounded;
         color = scheme.gutterText;
@@ -56,14 +72,15 @@ class ConsoleOutputRow extends StatelessWidget {
             child: line.isFirst ? Icon(icon, size: 13, color: color) : null,
           ),
           const SizedBox(width: AppConstants.spaceSm),
-          if (label != null && line.isFirst)
-            Text(
-              '$label  ',
-              style: TextStyle(
-                  color: color,
-                  fontFamily: editorFontFamily,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600),
+          if (line.type == ConsoleEventType.stderr)
+            SizedBox(
+              width: labelWidth,
+              child: line.isFirst
+                  ? Text('stderr',
+                      maxLines: 1,
+                      softWrap: false,
+                      style: consoleLabelStyle().copyWith(color: color))
+                  : null,
             ),
           Expanded(
             child: Text(
@@ -71,11 +88,7 @@ class ConsoleOutputRow extends StatelessWidget {
               maxLines: 1,
               softWrap: false,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  color: color,
-                  fontFamily: editorFontFamily,
-                  fontSize: kConsoleFontSize,
-                  height: 1.4),
+              style: consoleTextStyle().copyWith(color: color, height: 1.4),
             ),
           ),
         ],

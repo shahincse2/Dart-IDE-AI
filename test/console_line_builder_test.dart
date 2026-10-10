@@ -1,70 +1,90 @@
+import 'dart:math' as math;
+
 import 'package:dartlab/models/console_event.dart';
 import 'package:dartlab/widgets/console/console_line_builder.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// A stand-in splitter: cuts every [size] characters.
+RowSplitter chop(int size) => (text, type) {
+      if (text.isEmpty) return [''];
+      return [
+        for (var i = 0; i < text.length; i += size)
+          text.substring(i, math.min(i + size, text.length)),
+      ];
+    };
+
+ConsoleLineBuilder builderWith(int size) =>
+    ConsoleLineBuilder()..configure(layoutKey: size, splitter: chop(size));
+
 void main() {
-  group('wrapRow', () {
-    test('short text stays on one row', () {
-      expect(wrapRow('hello', 10), ['hello']);
-      expect(wrapRow('', 10), ['']);
-    });
-
-    test('long text without spaces is cut at the width', () {
-      expect(wrapRow('a' * 12, 5), ['aaaaa', 'aaaaa', 'aa']);
-    });
-
-    test('prefers to break at a space', () {
-      expect(wrapRow('hello brave new world', 12), ['hello brave', 'new world']);
-    });
-
-    test('non-ASCII text gets shorter rows', () {
-      expect(wrapRow('α' * 10, 10), ['αααααα', 'αααα']);
-    });
-
-    test('never separates a character from its combining mark', () {
-      const text = 'abcdee\u0301fgh';
-      expect(wrapRow(text, 10), ['abcde', 'e\u0301fgh']);
-    });
-  });
-
   group('ConsoleLineBuilder', () {
     test('an event with several lines becomes several rows', () {
-      final builder = ConsoleLineBuilder()
-        ..update([ConsoleEvent.stdout('a\nb')], columns: 20);
+      final builder = builderWith(20)..update([ConsoleEvent.stdout('a\nb')]);
 
       expect(builder.lines.map((l) => l.text), ['a', 'b']);
       expect(builder.lines.map((l) => l.isFirst), [true, false]);
     });
 
+    test('a wrapped line keeps the icon on its first row only', () {
+      final builder = builderWith(10)..update([ConsoleEvent.stdout('x' * 25)]);
+
+      expect(builder.lines.map((l) => l.text.length), [10, 10, 5]);
+      expect(builder.lines.map((l) => l.isFirst), [true, false, false]);
+    });
+
     test('only new events are added on later updates', () {
       final events = [ConsoleEvent.stdout('one')];
-      final builder = ConsoleLineBuilder()..update(events, columns: 20);
+      final builder = builderWith(20)..update(events);
       events.add(ConsoleEvent.stdout('two'));
-      builder.update(events, columns: 20);
+      builder.update(events);
 
       expect(builder.lines.map((l) => l.text), ['one', 'two']);
     });
 
-    test('changing the width re-wraps everything', () {
+    test('changing the layout re-wraps everything', () {
       final events = [ConsoleEvent.stdout('x' * 30)];
-      final builder = ConsoleLineBuilder()..update(events, columns: 20);
+      final builder = builderWith(20)..update(events);
       expect(builder.lines.length, 2);
 
-      builder.update(events, columns: 10);
+      builder
+        ..configure(layoutKey: 10, splitter: chop(10))
+        ..update(events);
       expect(builder.lines.length, 3);
     });
 
     test('cleared events start the list over', () {
-      final events = [ConsoleEvent.stdout('a'), ConsoleEvent.stdout('b')];
-      final builder = ConsoleLineBuilder()..update(events, columns: 20);
+      final builder = builderWith(20)
+        ..update([ConsoleEvent.stdout('a'), ConsoleEvent.stdout('b')])
+        ..update([ConsoleEvent.stdout('c')]);
 
-      builder.update([ConsoleEvent.stdout('c')], columns: 20);
       expect(builder.lines.map((l) => l.text), ['c']);
     });
 
-    test('the exit code gets its own row', () {
+    test('a new run with as many events as the old one replaces the output', () {
+      final builder = builderWith(20)
+        ..update([ConsoleEvent.stdout('a'), ConsoleEvent.stdout('b')])
+        ..update([ConsoleEvent.stdout('c'), ConsoleEvent.stdout('d')]);
+
+      expect(builder.lines.map((l) => l.text), ['c', 'd']);
+    });
+
+    test('the splitter is told whether the text is an error', () {
+      final seen = <ConsoleEventType>[];
       final builder = ConsoleLineBuilder()
-        ..update([ConsoleEvent.exitCode(0)], columns: 20);
+        ..configure(
+          layoutKey: 1,
+          splitter: (text, type) {
+            seen.add(type);
+            return [text];
+          },
+        )
+        ..update([ConsoleEvent.stdout('a'), ConsoleEvent.stderr('b')]);
+
+      expect(seen, [ConsoleEventType.stdout, ConsoleEventType.stderr]);
+    });
+
+    test('the exit code gets its own row', () {
+      final builder = builderWith(20)..update([ConsoleEvent.exitCode(0)]);
 
       expect(builder.lines.single.text, 'Program finished (exit code 0)');
     });
