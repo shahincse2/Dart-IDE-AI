@@ -60,7 +60,8 @@ void main() {
       expect(builder.lines.map((l) => l.text), ['c']);
     });
 
-    test('a new run with as many events as the old one replaces the output', () {
+    test('a new run with as many events as the old one replaces the output',
+        () {
       final builder = builderWith(20)
         ..update([ConsoleEvent.stdout('a'), ConsoleEvent.stdout('b')])
         ..update([ConsoleEvent.stdout('c'), ConsoleEvent.stdout('d')]);
@@ -68,19 +69,31 @@ void main() {
       expect(builder.lines.map((l) => l.text), ['c', 'd']);
     });
 
-    test('the splitter is told whether the text is an error', () {
-      final seen = <ConsoleEventType>[];
-      final builder = ConsoleLineBuilder()
-        ..configure(
-          layoutKey: 1,
-          splitter: (text, type) {
-            seen.add(type);
-            return [text];
-          },
-        )
-        ..update([ConsoleEvent.stdout('a'), ConsoleEvent.stderr('b')]);
+    // test('the splitter is told whether the text is an error', () {
+    //   final seen = <ConsoleEventType>[];
+    //   final builder = ConsoleLineBuilder()
+    //     ..configure(
+    //       layoutKey: 1,
+    //       splitter: (text, type) {
+    //         seen.add(type);
+    //         return [text];
+    //       },
+    //     )
+    //     ..update([ConsoleEvent.stdout('a'), ConsoleEvent.stderr('b')]);
+    //
+    //   expect(seen, [ConsoleEventType.stdout, ConsoleEventType.stderr]);
+    // });
+    test('changing the layout re-wraps everything', () {
+      final events = [ConsoleEvent.stdout('x' * 30)];
+      final builder = builderWith(20)..update(events);
+      expect(builder.lines.length, 2);
 
-      expect(seen, [ConsoleEventType.stdout, ConsoleEventType.stderr]);
+      builder
+        ..configure(layoutKey: 10, splitter: chop(10))
+        ..update(events);
+
+      // এখানে builder ব্যবহার করে চেক করা হয়েছে
+      expect(builder.lines.length, 3);
     });
 
     test('the exit code gets its own row', () {

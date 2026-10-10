@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../utils/bracket_matcher.dart';
 import '../utils/dart_syntax_highlighter.dart';
 import '../utils/fold_regions.dart';
+import '../utils/string_escapes.dart'; // ← এই লাইনটা যোগ করুন
 import '../utils/themes.dart';
 
 /// A [TextEditingController] that syntax-highlights Dart code, shows
@@ -78,6 +79,27 @@ class CodeEditorController extends TextEditingController {
       _cachedTokenText = text;
     }
     return _cachedTokens;
+  }
+
+  EscapeRanges _cachedEscapes = EscapeRanges.empty;
+  String _cachedEscapeText = '';
+
+  /// Escape sequences (\n, \t, \u00e9 ...) inside string literals, found
+  /// again only when the text changes.
+  EscapeRanges get escapes {
+    if (text != _cachedEscapeText) {
+      final stringRanges = <int>[];
+      for (final t in tokens) {
+        if (t.type == TokenType.string) {
+          stringRanges
+            ..add(t.start)
+            ..add(t.end);
+        }
+      }
+      _cachedEscapes = findStringEscapes(text, stringRanges);
+      _cachedEscapeText = text;
+    }
+    return _cachedEscapes;
   }
 
   /// Sets which character ranges Find & Replace's search box currently
@@ -630,6 +652,7 @@ class CodeEditorController extends TextEditingController {
 
     final source = text;
     final toks = tokens;
+    final esc = escapes;
     final bracketMatch = value.selection.isCollapsed
         ? findMatchingBracket(source, toks, value.selection.baseOffset)
         : null;
@@ -659,6 +682,7 @@ class CodeEditorController extends TextEditingController {
       breakpoints.add(r.start);
       breakpoints.add(r.end);
     }
+    breakpoints.addAll(esc.boundaries);
     final sorted =
         breakpoints.where((b) => b >= 0 && b <= source.length).toList();
 
@@ -713,7 +737,9 @@ class CodeEditorController extends TextEditingController {
         TextSpan(
           text: source.substring(start, end),
           style: style?.copyWith(
-            color: tokenType != null ? _colorFor(tokenType) : _scheme.text,
+            color: esc.covers(start, end)
+                ? _scheme.operatorColor
+                : (tokenType != null ? _colorFor(tokenType) : _scheme.text),
             backgroundColor: backgroundColor,
             fontWeight: isBracketMatch ? FontWeight.w700 : null,
           ),
