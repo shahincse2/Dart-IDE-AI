@@ -5,6 +5,7 @@ import 'package:tom_d4rt/tom_d4rt.dart';
 import '../console_io/console_io_binding.dart';
 import '../console_io/line_console_sink.dart';
 import 'output_batcher.dart';
+import 'runner_errors.dart';
 import 'runner_messages.dart';
 
 /// Entry point of the runner isolate (programs that need no stdin).
@@ -34,12 +35,15 @@ Future<void> isolateMain(RunRequest request) async {
       );
       finish();
       port.send(const RunnerMessage.done(0));
-    }, zoneSpecification: ZoneSpecification(
-      print: (self, parent, zone, line) => sink.writeOut('$line\n'),
-    ));
+    },
+        zoneSpecification: ZoneSpecification(
+          print: (self, parent, zone, line) => sink.writeOut('$line\n'),
+        ));
   }, (error, stack) {
     finish();
-    port.send(RunnerMessage.stderr(error.toString()));
+    port.send(RunnerMessage.stderr(
+      friendlyRunError(error, source: request.source),
+    ));
     port.send(const RunnerMessage.done(1));
   });
 }

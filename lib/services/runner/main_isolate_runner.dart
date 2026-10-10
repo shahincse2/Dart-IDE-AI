@@ -5,6 +5,7 @@ import 'package:tom_d4rt/tom_d4rt.dart';
 import '../../models/console_event.dart';
 import '../console_io/console_io_binding.dart';
 import '../console_io/line_console_sink.dart';
+import 'runner_errors.dart';
 import 'runner_limits.dart';
 import 'stdin_bridge.dart';
 
@@ -13,12 +14,13 @@ import 'stdin_bridge.dart';
 /// The interpreter can then `await` a line typed in the console's input bar
 /// without any busy-waiting. Trade-off: CPU-heavy code here can slow the
 /// UI, and a synchronous endless loop cannot be interrupted. Stop works
-/// between reads through [StdinBridge.cancel].
+/// while the program waits for input, see [StdinBridge.cancel].
 class MainIsolateRunner {
   MainIsolateRunner(this._stdin);
 
   final StdinBridge _stdin;
   Timer? _timeout;
+  StreamSubscription<bool>? _waitingSub;
 
   Future<void> run({
     required String source,
@@ -61,15 +63,29 @@ class MainIsolateRunner {
       },
     );
 
-    _timeout = Timer(timeout, () {
-      if (_stdin.isCancelled) return;
-      _stdin.cancel();
-      controller.add(
-        ConsoleEvent.stderr('Time Limit Exceeded (${timeout.inSeconds}s)'),
-      );
-      controller.add(ConsoleEvent.exitCode(124));
-      _finish(controller);
+    // The time limit counts RUNNING time only: it is paused while the
+    // program waits for the user, and starts afresh after every answer.
+    void startTimer() {
+      _timeout?.cancel();
+      _timeout = Timer(timeout, () {
+        if (_stdin.isCancelled) return;
+        _stdin.cancel();
+        controller.add(
+          ConsoleEvent.stderr('Time Limit Exceeded (${timeout.inSeconds}s)'),
+        );
+        controller.add(ConsoleEvent.exitCode(124));
+        _finish(controller);
+      });
+    }
+
+    _waitingSub = _stdin.waitingChanges.listen((waiting) {
+      if (waiting) {
+        _timeout?.cancel();
+      } else if (!_stdin.isCancelled) {
+        startTimer();
+      }
     });
+    startTimer();
 
     try {
       await runZonedGuarded(() async {
@@ -89,7 +105,9 @@ class MainIsolateRunner {
         if (_stdin.isCancelled) return;
         _stdin.cancel();
         sink.flush();
-        controller.add(ConsoleEvent.stderr(error.toString()));
+        controller.add(
+          ConsoleEvent.stderr(friendlyRunError(error, source: source)),
+        );
         controller.add(ConsoleEvent.exitCode(1));
       });
     } finally {
@@ -109,6 +127,8 @@ class MainIsolateRunner {
   void _finish(StreamController<ConsoleEvent>? controller) {
     _timeout?.cancel();
     _timeout = null;
+    _waitingSub?.cancel();
+    _waitingSub = null;
     if (controller != null && !controller.isClosed) controller.close();
   }
 }
