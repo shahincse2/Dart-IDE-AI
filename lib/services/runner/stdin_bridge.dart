@@ -1,62 +1,54 @@
 import 'dart:async';
 
-/// Connects "the program wants a line" to "the user typed a line".
+/// The UI side of "the program wants a line" / "the user typed a line".
 ///
-/// The interpreter calls [readLine] and waits; the UI listens to
-/// [requests], shows an input field, and answers with [reply].
+/// The runner calls [requestLine] when the program starts waiting; the UI
+/// listens to [requests], shows an input field, and answers with [reply],
+/// which hands the line to whatever the runner [attach]ed.
 class StdinBridge {
   final StreamController<void> _requests = StreamController<void>.broadcast();
   final StreamController<bool> _waiting = StreamController<bool>.broadcast();
-  Completer<String>? _pending;
-  bool _cancelled = false;
+  void Function(String line)? _deliver;
+  bool _isWaiting = false;
 
   /// Fires each time the program starts waiting for input.
   Stream<void> get requests => _requests.stream;
 
   /// `true` when the program starts waiting for a line, `false` when the
-  /// wait ends (answered, or the run was cancelled).
+  /// wait ends (answered, or the run ended).
   Stream<bool> get waitingChanges => _waiting.stream;
 
-  bool get hasPending => _pending != null && !_pending!.isCompleted;
+  bool get hasPending => _isWaiting;
 
-  bool get isCancelled => _cancelled;
-
-  /// Call before a new run.
-  void reset() {
-    _cancelled = false;
-    _pending = null;
+  /// A run starts: answers go to [deliver].
+  void attach(void Function(String line) deliver) {
+    _deliver = deliver;
+    _isWaiting = false;
   }
 
-  /// Called by the interpreter. Completes when the user submits a line.
-  Future<String> readLine() {
-    // After Stop / the time limit the program is never answered again: it
-    // stays suspended at this call. (Feeding it empty lines made a program
-    // like `while (true) { await stdin.readLineSync(); }` spin forever on
-    // the event queue, and that froze the whole app.)
-    if (_cancelled) return Completer<String>().future;
+  /// The run is over. A wait that is still open just ends, unanswered.
+  void detach() {
+    _deliver = null;
+    _endWait();
+  }
 
-    final completer = Completer<String>();
-    _pending = completer;
+  /// The running program asks for a line.
+  void requestLine() {
+    _isWaiting = true;
     _requests.add(null);
     _waiting.add(true);
-    return completer.future;
   }
 
-  /// The user's answer.
+  /// The user's answer. Ignored when nothing is waiting.
   void reply(String text) {
-    final completer = _pending;
-    _pending = null;
-    if (completer == null || completer.isCompleted) return;
-    completer.complete(text);
-    _waiting.add(false);
+    if (!_isWaiting) return;
+    _deliver?.call(text);
+    _endWait();
   }
 
-  /// Ends the run. A read that is waiting right now is simply never
-  /// answered, so the program stays suspended instead of carrying on.
-  void cancel() {
-    _cancelled = true;
-    if (_pending == null) return;
-    _pending = null;
+  void _endWait() {
+    if (!_isWaiting) return;
+    _isWaiting = false;
     _waiting.add(false);
   }
 

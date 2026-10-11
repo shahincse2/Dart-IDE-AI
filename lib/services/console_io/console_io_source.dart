@@ -2,54 +2,40 @@ import 'console_io_prelude.dart';
 
 /// The outcome of [ConsoleIoSource.prepare].
 class PreparedSource {
-  const PreparedSource.ok(this.source, {this.needsStdin = false})
-      : error = null;
-  const PreparedSource.failed(String this.error)
-      : source = '',
-        needsStdin = false;
+  const PreparedSource.ok(this.source) : error = null;
+  const PreparedSource.failed(String this.error) : source = '';
 
   /// What to hand to the interpreter.
   final String source;
 
   /// A learner-friendly reason the program cannot run, or null.
   final String? error;
-
-  /// True when the program reads input, so it has to run where the UI can
-  /// answer the request.
-  final bool needsStdin;
 }
 
 /// Lets ordinary console programs run without exposing the real `dart:io`.
 ///
 /// For a program that imports `dart:io` this
-///   * refuses anything except `stdin`, `stdout` and `stderr`,
+///   * refuses anything except `stdin`, `stdout`, `stderr` and `exit`,
 ///   * turns the import into a comment (same line, so line numbers hold),
-///   * adds `await` to `stdin.readLineSync()` and makes `main` async,
-///   * appends the DartLab `stdout`/`stderr`/`stdin` implementation.
+///   * appends the DartLab implementation of those four.
 /// Programs that use neither `dart:io` nor `readLineSync` pass through as is.
 class ConsoleIoSource {
   ConsoleIoSource._();
 
-  static const _allowedNames = {'stdin', 'stdout', 'stderr'};
+  static const _allowedNames = {'stdin', 'stdout', 'stderr', 'exit'};
 
-  static const _sandboxNote =
-      'DartLab runs programs in a sandbox: from dart:io only stdin, stdout and stderr are available. File, network and process access is switched off for your safety.';
+  static const _sandboxNote = 'DartLab runs programs in a sandbox: from '
+      'dart:io only stdin, stdout, stderr and exit are available. File, '
+      'network and process access is switched off for your safety.';
 
   static final _dartIoImport = RegExp(
     r'''^[ \t]*import\s+['"]dart:io['"]([^;]*);''',
     multiLine: true,
   );
-  static final _stdinRead =
-      RegExp(r'\bstdin\s*\.\s*readLineSync\s*\(([^()]*)\)');
-  static final _endsWithAwait = RegExp(r'\bawait\s*$');
-  static final _mainDeclaration = RegExp(
-    r'^[ \t]*(?:void\s+|Future<void>\s+|Future\s+)?main\s*\(([^)]*)\)\s*(async\s*)?\{',
-    multiLine: true,
-  );
   static final _unsupportedUse = RegExp(
     r'\b(?:File|Directory|Link|Process|HttpClient|HttpServer|ServerSocket|WebSocket|RandomAccessFile)\s*[.(]'
     r'|\b(?:Platform|Socket|InternetAddress)\s*\.'
-    r'|\b(?:exit|sleep)\s*\(',
+    r'|\bsleep\s*\(',
   );
   static final _commentsAndStrings = RegExp(
     r'''//[^\n]*|/\*[\s\S]*?\*/|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"''',
@@ -67,8 +53,6 @@ class ConsoleIoSource {
       final problem = _importProblem(imports) ?? _usageProblem(source);
       if (problem != null) return PreparedSource.failed(problem);
       code = _removeImports(code);
-      final awaited = _awaitStdinReads(code);
-      code = awaited == code ? code : _makeMainAsync(awaited);
       withPrelude = true;
     }
 
@@ -76,10 +60,7 @@ class ConsoleIoSource {
     // numbers in error messages still match the editor.
     final header = "import '$kConsoleIoLibrary'; ";
     final tail = withPrelude ? '\n\n$kConsoleIoPrelude' : '';
-    return PreparedSource.ok(
-      '$header$code$tail',
-      needsStdin: code.contains('readLineSync'),
-    );
+    return PreparedSource.ok('$header$code$tail');
   }
 
   static String? _importProblem(List<RegExpMatch> imports) {
@@ -114,20 +95,5 @@ class ConsoleIoSource {
       code.replaceAllMapped(_dartIoImport, (match) {
         final lineBreaks = '\n'.allMatches(match.group(0)!).length;
         return '// dart:io is provided by DartLab${'\n' * lineBreaks}';
-      });
-
-  static String _awaitStdinReads(String code) =>
-      code.replaceAllMapped(_stdinRead, (match) {
-        final before = code.substring(0, match.start);
-        if (_endsWithAwait.hasMatch(before)) return match.group(0)!;
-        return '(await stdin.readLineSync(${match.group(1)}))';
-      });
-
-  static String _makeMainAsync(String code) =>
-      code.replaceFirstMapped(_mainDeclaration, (match) {
-        if (match.group(2) != null) return match.group(0)!; // already async
-        final text = match.group(0)!;
-        final indent = text.substring(0, text.length - text.trimLeft().length);
-        return '${indent}Future<void> main(${match.group(1)}) async {';
       });
 }

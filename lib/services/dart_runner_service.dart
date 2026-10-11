@@ -3,26 +3,22 @@ import 'dart:async';
 import '../models/console_event.dart';
 import 'console_io/console_io_source.dart';
 import 'runner/isolate_runner.dart';
-import 'runner/main_isolate_runner.dart';
 import 'runner/runner_limits.dart';
 import 'runner/stdin_bridge.dart';
 
 /// Runs Dart source with `tom_d4rt` and reports a stream of console events.
 ///
-/// Programs that read input run on the main isolate ([MainIsolateRunner]);
-/// everything else runs in a dedicated isolate ([IsolateRunner]) so Stop
-/// and the time limit always work. Both only ever see the program through
-/// `ConsoleIoSource.prepare`, which is also what keeps `dart:io` (files,
-/// network, processes) out of reach.
+/// Every program runs in its own isolate ([IsolateRunner]), so Stop and the
+/// time limit always work. The source first goes through
+/// `ConsoleIoSource.prepare`, which gives programs `stdin`/`stdout`/`exit`
+/// and keeps `dart:io` (files, network, processes) out of reach.
 class DartRunnerService {
   final StdinBridge _stdin = StdinBridge();
-  final IsolateRunner _isolateRunner = IsolateRunner();
-  late final MainIsolateRunner _mainRunner = MainIsolateRunner(_stdin);
+  late final IsolateRunner _runner = IsolateRunner(_stdin);
   StreamController<ConsoleEvent>? _controller;
 
   bool get isRunning =>
-      _isolateRunner.isActive ||
-      (_controller != null && !_controller!.isClosed);
+      _runner.isActive || (_controller != null && !_controller!.isClosed);
 
   /// Fires when the program needs a line of input. The UI should show an
   /// input field and call [sendStdinReply].
@@ -50,8 +46,7 @@ class DartRunnerService {
       return controller.stream;
     }
 
-    final runner = prepared.needsStdin ? _mainRunner.run : _isolateRunner.run;
-    unawaited(runner(
+    unawaited(_runner.run(
       source: prepared.source,
       args: args,
       timeout: timeout,
@@ -60,13 +55,7 @@ class DartRunnerService {
     return controller.stream;
   }
 
-  void stop() {
-    if (_isolateRunner.isActive) {
-      _isolateRunner.stop();
-    } else {
-      _mainRunner.stop(_controller);
-    }
-  }
+  void stop() => _runner.stop();
 
   void dispose() => _stdin.dispose();
 }

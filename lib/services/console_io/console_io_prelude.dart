@@ -1,16 +1,17 @@
 /// Virtual library that holds the native half of console I/O.
 const String kConsoleIoLibrary = 'package:dartlab/console_io.dart';
 
-/// Dart source that gives a program `stdout`, `stderr` and `stdin`.
+/// Dart source that gives a program `stdout`, `stderr`, `stdin` and `exit`.
 ///
 /// It is appended to the user's program (declarations may appear in any
 /// order, so the user's line numbers stay untouched) and is built only on
 /// the functions registered by `bindConsoleIo`. Nothing here reaches the
 /// real `dart:io`: output goes to the DartLab console, input comes from
-/// the console's input bar.
+/// the console's input bar, and `exit` ends only the program, never the app.
 ///
-/// `stdin.readLineSync()` is asynchronous here (the program has to wait for
-/// the user to type); `ConsoleIoSource` adds the `await` for the program.
+/// `stdin.readLineSync()` really blocks (the program's own isolate waits for
+/// the line), so it works anywhere: in `main`, in helper functions, in
+/// getters, in callbacks.
 const String kConsoleIoPrelude = r'''
 // ---- DartLab console I/O (added automatically) ----
 class _DartLabOutput {
@@ -34,8 +35,8 @@ class _DartLabOutput {
 }
 
 class _DartLabInput {
-  Future<String?> readLineSync({Object? encoding, bool retainNewlines = false}) async {
-    final line = await dartlabReadLine();
+  String? readLineSync({Object? encoding, bool retainNewlines = false}) {
+    final line = dartlabReadLine();
     return retainNewlines ? '$line\n' : line;
   }
 }
@@ -43,4 +44,6 @@ class _DartLabInput {
 final stdout = _DartLabOutput(false);
 final stderr = _DartLabOutput(true);
 final stdin = _DartLabInput();
+
+void exit(int code) => dartlabExit(code);
 ''';

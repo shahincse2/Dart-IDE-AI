@@ -1,19 +1,27 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:isolate';
 
 import '../../models/console_event.dart';
 import 'isolate_entry.dart';
+import 'run_timer.dart';
 import 'runner_limits.dart';
 import 'runner_messages.dart';
+import 'stdin_bridge.dart';
+import 'stdin_mailbox.dart';
 
-/// Runs a program in a dedicated Isolate (programs that need no stdin).
-///
-/// CPU-heavy code stays off the UI thread, and `Isolate.kill()` gives a
-/// genuine Stop / time limit, even for an endless loop.
+/// Runs a program in a dedicated Isolate, so `Isolate.kill()` gives a genuine
+/// Stop / time limit even for an endless loop or a program blocked waiting
+/// for input. The time limit is paused while the program waits for the user.
 class IsolateRunner {
+  IsolateRunner(this._stdin);
+
+  final StdinBridge _stdin;
+  final RunTimer _timer = RunTimer();
   Isolate? _isolate;
   ReceivePort? _port;
-  Timer? _timeout;
+  Directory? _mailDir;
+  StreamSubscription<bool>? _waitingSub;
   StreamController<ConsoleEvent>? _controller;
 
   bool get isActive => _isolate != null;
@@ -29,9 +37,17 @@ class IsolateRunner {
     _port = port;
 
     try {
+      final dir = Directory.systemTemp.createTempSync('dartlab_run_');
+      _mailDir = dir;
+      _stdin.attach(StdinMailbox(dir.path).deliver);
       _isolate = await Isolate.spawn(
         isolateMain,
-        RunRequest(source: source, args: args, sendPort: port.sendPort),
+        RunRequest(
+          source: source,
+          args: args,
+          sendPort: port.sendPort,
+          stdinDir: dir.path,
+        ),
         onError: port.sendPort,
         onExit: port.sendPort,
       );
@@ -43,7 +59,9 @@ class IsolateRunner {
       return;
     }
 
-    _timeout = Timer(
+    _waitingSub = _stdin.waitingChanges
+        .listen((waiting) => waiting ? _timer.pause() : _timer.resume());
+    _timer.start(
       timeout,
       () => _terminate(
         exitCode: 124,
@@ -71,6 +89,8 @@ class IsolateRunner {
           }
         case RunnerMessageType.stderr:
           controller.add(ConsoleEvent.stderr(message.text ?? ''));
+        case RunnerMessageType.stdinRequest:
+          _stdin.requestLine();
         case RunnerMessageType.limit:
           _terminate(
             exitCode: 1,
@@ -108,10 +128,20 @@ class IsolateRunner {
   }
 
   void _cleanup() {
-    _timeout?.cancel();
-    _timeout = null;
+    _waitingSub?.cancel();
+    _waitingSub = null;
+    _timer.cancel();
+    _stdin.detach();
     _port?.close();
     _port = null;
     _isolate = null;
+
+    final dir = _mailDir;
+    _mailDir = null;
+    try {
+      dir?.deleteSync(recursive: true);
+    } on FileSystemException {
+      // Only temporary files: the system cleans them up eventually.
+    }
   }
 }
