@@ -8,7 +8,9 @@ import '../utils/constants.dart';
 import '../utils/themes.dart';
 import 'console/console_drag_handle.dart';
 import 'console/console_header.dart';
+import 'console/console_height.dart';
 import 'console/console_output_list.dart';
+import 'console/console_reopen_bar.dart';
 import 'console/console_stdin_bar.dart';
 
 /// The real Console panel (Section 26-31):
@@ -28,29 +30,58 @@ class ConsolePanel extends StatelessWidget {
     final themeName =
         context.select<SettingsProvider, String>((s) => s.editorThemeName);
     final scheme = editorSchemeFromName(themeName);
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.7;
+    final media = MediaQuery.of(context);
+    // How tall the console may be right now (less while the keyboard is up).
+    final maxHeight = consoleMaxHeight(
+      screenHeight: media.size.height,
+      keyboardHeight: media.viewInsets.bottom,
+    );
+    // The drag handle keeps its old, keyboard-free limit.
+    final dragLimit = consoleMaxHeight(
+      screenHeight: media.size.height,
+      keyboardHeight: 0,
+    );
+    // Closing the console only hides it, so offer a way back to its output.
+    final canReopen =
+        !console.isOpen && (runner.isRunning || runner.events.isNotEmpty);
 
-    return AnimatedContainer(
-      duration: AppConstants.animBase,
-      curve: Curves.easeOutCubic,
-      height: console.isOpen
-          ? console.height.clamp(AppConstants.consoleMinOpenHeight, maxHeight)
-          : 0,
-      decoration: BoxDecoration(
-        color: scheme.gutterBackground,
-        border: Border(
-            top: BorderSide(
-                color: scheme.gutterText.withValues(alpha: 0.2), width: 0.5)),
-      ),
-      clipBehavior: Clip.hardEdge,
-      child: console.isOpen
-          ? _ConsoleContent(
-              console: console,
-              runner: runner,
-              scheme: scheme,
-              maxHeight: maxHeight,
-            )
-          : null,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (canReopen)
+          ConsoleReopenBar(
+            scheme: scheme,
+            isRunning: runner.isRunning,
+            onTap: console.open,
+          ),
+        AnimatedContainer(
+          duration: AppConstants.animBase,
+          curve: Curves.easeOutCubic,
+          height: console.isOpen
+              ? consoleHeightFor(
+                  wanted: console.height,
+                  minOpen: AppConstants.consoleMinOpenHeight,
+                  maxHeight: maxHeight,
+                )
+              : 0,
+          decoration: BoxDecoration(
+            color: scheme.gutterBackground,
+            border: Border(
+                top: BorderSide(
+                    color: scheme.gutterText.withValues(alpha: 0.2),
+                    width: 0.5)),
+          ),
+          clipBehavior: Clip.hardEdge,
+          child: console.isOpen
+              ? _ConsoleContent(
+                  console: console,
+                  runner: runner,
+                  scheme: scheme,
+                  maxHeight: dragLimit,
+                )
+              : null,
+        ),
+      ],
     );
   }
 }

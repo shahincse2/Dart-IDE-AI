@@ -3,7 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../models/project_model.dart';
 import '../providers/file_provider.dart';
+import '../services/last_file_store.dart';
+import '../services/restore_last_file.dart';
 import '../utils/constants.dart';
+import '../widgets/name_dialog.dart';
 import 'editor_screen.dart';
 import 'settings_screen.dart';
 
@@ -87,7 +90,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _openProject(BuildContext context, ProjectModel project) async {
     final fileProvider = context.read<FileProvider>();
+    // Read BEFORE openProject: it opens the default file, which changes
+    // what is remembered.
+    final remembered = await LastFileStore().read(project.id);
     await fileProvider.openProject(project);
+    await restoreLastFile(fileProvider, remembered);
     if (!context.mounted) return;
     await Navigator.of(
       context,
@@ -147,27 +154,9 @@ class _EmptyProjectsView extends StatelessWidget {
   }
 }
 
-Future<String?> _promptProjectName(BuildContext context) {
-  final controller = TextEditingController();
-  return showDialog<String>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text('New project'),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        decoration: const InputDecoration(hintText: 'Project name'),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(dialogContext),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
-          child: const Text('Create'),
-        ),
-      ],
-    ),
-  );
-}
+Future<String?> _promptProjectName(BuildContext context) => showNameDialog(
+      context,
+      title: 'New project',
+      hint: 'Project name',
+      confirmLabel: 'Create',
+    );

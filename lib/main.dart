@@ -6,6 +6,7 @@ import 'providers/file_provider.dart';
 import 'providers/runner_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/home_screen.dart';
+import 'services/last_file_tracker.dart';
 import 'utils/constants.dart';
 import 'utils/themes.dart';
 
@@ -32,6 +33,21 @@ class DartLabApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (_) => FileProvider(),
+        ),
+        // Remembers the last open file of each project. It only watches
+        // FileProvider (no change needed there); `lazy: false` so it is
+        // already listening from app start.
+        Provider<LastFileTracker>(
+          lazy: false,
+          create: (context) {
+            final files = context.read<FileProvider>();
+            return LastFileTracker(
+              changes: files,
+              projectId: () => files.currentProject?.id,
+              activeFile: () => files.activeTab,
+            );
+          },
+          dispose: (_, tracker) => tracker.dispose(),
         ),
         // ConsoleProvider only manages visibility/sizing — it reads
         // RunnerProvider's events rather than duplicating them, so it

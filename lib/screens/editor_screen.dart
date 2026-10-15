@@ -18,6 +18,7 @@ import '../widgets/code_editor_controller.dart';
 import '../widgets/coding_toolbar.dart';
 import '../widgets/completion_overlay.dart';
 import '../widgets/console_panel.dart';
+import '../widgets/editor_app_bar_title.dart';
 import '../widgets/file_tab_bar.dart';
 import '../widgets/file_tree.dart';
 import '../widgets/find_replace_bar.dart';
@@ -368,6 +369,11 @@ class _EditorScreenState extends State<EditorScreen> {
         onSharePdfPressed: activeController != null ? _handleSharePdf : null,
         onImportPressed: _handleImport,
         fileName: fileProvider.activeFileName ?? 'No file open',
+        filePath: activePath == null
+            ? null
+            : [fileProvider.currentProject?.name, activePath]
+                .whereType<String>()
+                .join('/'),
         isDirty: activePath != null && fileProvider.isDirty(activePath),
         useSidebar: useSidebar,
         isRunning: isRunning,
@@ -464,6 +470,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
 class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String fileName;
+  final String? filePath;
   final bool isDirty;
   final bool useSidebar;
   final bool isRunning;
@@ -489,6 +496,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   const _EditorAppBar({
     required this.fileName,
+    this.filePath,
     required this.isDirty,
     required this.useSidebar,
     required this.isRunning,
@@ -517,22 +525,14 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     return AppBar(
       automaticallyImplyLeading: !useSidebar,
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(child: Text(fileName, overflow: TextOverflow.ellipsis)),
-          if (isDirty) ...[
-            const SizedBox(width: AppConstants.spaceSm),
-            Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ],
-        ],
+      // Wide layouts (Windows, tablets, landscape) have no drawer button and
+      // no system back key, so they get an explicit way out.
+      leading:
+          useSidebar && Navigator.canPop(context) ? const BackButton() : null,
+      title: EditorAppBarTitle(
+        fileName: fileName,
+        filePath: filePath,
+        isDirty: isDirty,
       ),
       actions: [
         IconButton(

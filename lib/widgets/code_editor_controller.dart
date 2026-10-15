@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:math' as math;
 
@@ -39,6 +40,7 @@ class CodeEditorController extends TextEditingController {
   int _activeSearchMatch = -1;
 
   int? _errorLine;
+  bool _isDisposed = false;
 
   // ---- Code folding state ------------------------------------------------
 
@@ -66,7 +68,18 @@ class CodeEditorController extends TextEditingController {
   set scheme(EditorColorScheme value) {
     if (identical(_scheme, value)) return;
     _scheme = value;
-    notifyListeners();
+    // EditorScreen sets this from build(). Telling the listeners right there
+    // is illegal while the framework is building (one of them, the
+    // auto-save hook, notifies FileProvider). So notify just after.
+    scheduleMicrotask(() {
+      if (!_isDisposed) notifyListeners();
+    });
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 
   set indentSize(int value) => _indentSize = value;
