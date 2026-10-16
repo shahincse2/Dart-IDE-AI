@@ -3,8 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../models/project_model.dart';
 import '../providers/file_provider.dart';
-import '../services/last_file_store.dart';
-import '../services/restore_last_file.dart';
+import '../services/open_files_store.dart';
+import '../services/open_files_tracker.dart';
+import '../services/restore_open_files.dart';
 import '../utils/constants.dart';
 import '../widgets/name_dialog.dart';
 import 'editor_screen.dart';
@@ -90,11 +91,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _openProject(BuildContext context, ProjectModel project) async {
     final fileProvider = context.read<FileProvider>();
-    // Read BEFORE openProject: it opens the default file, which changes
-    // what is remembered.
-    final remembered = await LastFileStore().read(project.id);
+    final tracker = context.read<OpenFilesTracker>();
+    // Save the state of the project we are leaving, then read what was
+    // remembered for this one BEFORE openProject: it opens the default
+    // file, which changes what is remembered.
+    await tracker.flush();
+    final remembered = await OpenFilesStore().read(project.id);
     await fileProvider.openProject(project);
-    await restoreLastFile(fileProvider, remembered);
+    await restoreOpenFiles(fileProvider, remembered);
     if (!context.mounted) return;
     await Navigator.of(
       context,

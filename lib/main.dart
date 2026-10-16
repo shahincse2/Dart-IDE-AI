@@ -3,10 +3,11 @@ import 'package:provider/provider.dart';
 
 import 'providers/console_provider.dart';
 import 'providers/file_provider.dart';
+import 'providers/folder_expansion_provider.dart';
 import 'providers/runner_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/home_screen.dart';
-import 'services/last_file_tracker.dart';
+import 'services/open_files_tracker.dart';
 import 'utils/constants.dart';
 import 'utils/themes.dart';
 
@@ -34,16 +35,21 @@ class DartLabApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => FileProvider(),
         ),
-        // Remembers the last open file of each project. It only watches
+        // Which folders of the file tree the user has closed.
+        ChangeNotifierProvider(
+          create: (_) => FolderExpansion(),
+        ),
+        // Remembers the open tabs of each project. It only watches
         // FileProvider (no change needed there); `lazy: false` so it is
         // already listening from app start.
-        Provider<LastFileTracker>(
+        Provider<OpenFilesTracker>(
           lazy: false,
           create: (context) {
             final files = context.read<FileProvider>();
-            return LastFileTracker(
+            return OpenFilesTracker(
               changes: files,
               projectId: () => files.currentProject?.id,
+              openTabs: () => files.openTabs,
               activeFile: () => files.activeTab,
             );
           },

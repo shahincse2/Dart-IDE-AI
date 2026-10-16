@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/project_file_node.dart';
 import '../models/project_model.dart';
 import '../providers/file_provider.dart';
+import '../providers/folder_expansion_provider.dart';
 import '../utils/constants.dart';
 import 'name_dialog.dart';
 
@@ -115,26 +116,20 @@ class _TreeHeader extends StatelessWidget {
       await fileProvider.createFolder('', name);
     } else {
       await fileProvider.createFile('', name);
+      // The new file is open in the editor now: get the drawer out of the way.
+      if (context.mounted) _closeDrawerIfOpen(context);
     }
   }
 }
 
-class _FileTreeEntry extends StatefulWidget {
+class _FileTreeEntry extends StatelessWidget {
   final ProjectFileNode node;
   final int depth;
 
   const _FileTreeEntry({super.key, required this.node, required this.depth});
 
   @override
-  State<_FileTreeEntry> createState() => _FileTreeEntryState();
-}
-
-class _FileTreeEntryState extends State<_FileTreeEntry> {
-  bool _expanded = true;
-
-  @override
   Widget build(BuildContext context) {
-    final node = widget.node;
     final fileProvider = context.watch<FileProvider>();
 
     if (node.isFile) {
@@ -143,7 +138,7 @@ class _FileTreeEntryState extends State<_FileTreeEntry> {
       return _EntryRow(
         icon: Icons.description_outlined,
         label: node.name,
-        depth: widget.depth,
+        depth: depth,
         selected: isActive,
         // Files that are open in a background tab (but not the active
         // one) get a lighter indicator than the fully-selected style.
@@ -156,25 +151,32 @@ class _FileTreeEntryState extends State<_FileTreeEntry> {
       );
     }
 
+    // Whether a folder is open is kept in FolderExpansion, not here: this
+    // widget is rebuilt (and the whole tree even moves between drawer and
+    // sidebar), and a folder the user closed must stay closed.
+    final folderKey = '${fileProvider.currentProject?.id}/${node.relativePath}';
+    final expanded = context
+        .select<FolderExpansion, bool>((state) => state.isExpanded(folderKey));
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _EntryRow(
-          icon: _expanded ? Icons.folder_open_outlined : Icons.folder_outlined,
-          trailingIcon: _expanded
+          icon: expanded ? Icons.folder_open_outlined : Icons.folder_outlined,
+          trailingIcon: expanded
               ? Icons.expand_more_rounded
               : Icons.chevron_right_rounded,
           label: node.name,
-          depth: widget.depth,
-          onTap: () => setState(() => _expanded = !_expanded),
+          depth: depth,
+          onTap: () => context.read<FolderExpansion>().toggle(folderKey),
           onLongPress: () => _showEntryActions(context, node, isFolder: true),
         ),
-        if (_expanded)
+        if (expanded)
           ...node.children.map(
             (child) => _FileTreeEntry(
               key: ValueKey(child.relativePath),
               node: child,
-              depth: widget.depth + 1,
+              depth: depth + 1,
             ),
           ),
       ],
@@ -285,8 +287,8 @@ Future<String?> _promptForName(
 }) =>
     showNameDialog(context, title: title, initialValue: initialValue);
 
-/// Picking a file in the drawer closes it. (On wide screens the tree is a
-/// sidebar: there is no drawer, so there is nothing to close.)
+/// Picking (or creating) a file closes the drawer. On wide screens the tree
+/// is a sidebar: there is no drawer, so there is nothing to close.
 void _closeDrawerIfOpen(BuildContext context) {
   final scaffold = Scaffold.maybeOf(context);
   if (scaffold != null && scaffold.isDrawerOpen) scaffold.closeDrawer();
@@ -362,6 +364,8 @@ Future<void> _showEntryActions(
       final name = await _promptForName(context, title: 'New file');
       if (name != null && name.isNotEmpty) {
         await fileProvider.createFile(node.relativePath, name);
+        // The new file is open in the editor now: close the drawer.
+        if (context.mounted) _closeDrawerIfOpen(context);
       }
     case 'new_folder':
       final name = await _promptForName(context, title: 'New folder');
