@@ -21,6 +21,7 @@ import '../widgets/console_panel.dart';
 import '../widgets/editor_app_bar_title.dart';
 import '../widgets/file_tab_bar.dart';
 import '../widgets/file_tree.dart';
+import '../widgets/file_tree/import_action.dart';
 import '../widgets/find_replace_bar.dart';
 import '../widgets/font_size_dialog.dart';
 import '../widgets/go_to_line_dialog.dart';
@@ -119,24 +120,11 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  Future<void> _handleImport() async {
-    final result = await _fileShareService.importDartFile();
-    if (result == null || !mounted) return;
-    final project = _fileProvider.currentProject;
-    if (project == null) return;
-    await _fileProvider.createFile('', result.name.replaceAll('.dart', ''));
-    // Wait for the new file to be opened as the active tab,
-    // then write the imported content into its controller.
-    await Future.delayed(const Duration(milliseconds: 300));
-    final activePath = _fileProvider.activeTab;
-    if (activePath != null && mounted) {
-      _controllers[activePath]?.value = TextEditingValue(
-        text: result.content,
-        selection: const TextSelection.collapsed(offset: 0),
-      );
-      _fileProvider.scheduleAutoSave(activePath, result.content);
-    }
-  }
+  /// Import from the menu: the file goes into the folder last tapped in the
+  /// file tree, or the folder of the file being edited (see
+  /// [importIntoCurrentFolder]).
+  Future<void> _handleImport() =>
+      importIntoCurrentFolder(context, service: _fileShareService);
 
   Future<void> _handleShareCode() async {
     final activePath = _fileProvider.activeTab;
@@ -608,7 +596,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
               enabled: onExportPressed != null,
               value: onExportPressed,
               child: const ListTile(
-                leading: Icon(Icons.upload_file_outlined),
+                leading: Icon(Icons.file_download_outlined),
                 title: Text('Export file'),
                 contentPadding: EdgeInsets.zero,
               ),
@@ -616,7 +604,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
             PopupMenuItem(
               value: onImportPressed,
               child: const ListTile(
-                leading: Icon(Icons.download_for_offline_outlined),
+                leading: Icon(Icons.file_upload_outlined),
                 title: Text('Import file'),
                 contentPadding: EdgeInsets.zero,
               ),

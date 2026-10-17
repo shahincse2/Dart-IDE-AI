@@ -11,3 +11,10 @@ bool treeContainsFile(ProjectFileNode? node, String relativePath) {
   }
   return false;
 }
+
+/// The folder a relative path lives in: `lib/src/b.dart` -> `lib/src`,
+/// `main.dart` -> `` (the project root).
+String parentOf(String relativePath) {
+  final slash = relativePath.lastIndexOf('/');
+  return slash == -1 ? '' : relativePath.substring(0, slash);
+}

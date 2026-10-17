@@ -1,31 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/project_file_node.dart';
-import '../models/project_model.dart';
 import '../providers/file_provider.dart';
-import '../providers/folder_expansion_provider.dart';
+import '../providers/tree_selection_provider.dart';
 import '../utils/constants.dart';
-import 'name_dialog.dart';
+import 'file_tree/file_tree_entry.dart';
+import 'file_tree/selection_header.dart';
+import 'file_tree/transfer_action.dart';
+import 'file_tree/tree_header.dart';
 
 /// The real file tree (Section 21), replacing the drawer's
 /// "File tree arrives in Phase 5" placeholder. Reads [FileProvider]
 /// directly rather than taking it as a constructor param, same pattern
 /// as [ConsolePanel] — this widget is meant to be dropped into the
-/// drawer/sidebar as-is.
+/// drawer/sidebar as-is. The rows and actions live in `file_tree/`.
 class FileTreeView extends StatelessWidget {
   const FileTreeView({super.key});
 
   @override
   Widget build(BuildContext context) {
     final fileProvider = context.watch<FileProvider>();
+    final selection = context.watch<TreeSelection>();
     final project = fileProvider.currentProject;
     final tree = fileProvider.fileTree;
+    final selecting = selection.isActive(project?.id);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _TreeHeader(project: project),
+        if (selecting)
+          SelectionHeader(
+            count: selection.countFor(project?.id),
+            onClose: selection.clear,
+            onCopy: () => _transferSelection(context, copy: true),
+            onMove: () => _transferSelection(context, copy: false),
+          )
+        else
+          TreeHeader(project: project),
         const Divider(height: 0.5),
         Expanded(
           child: project == null
@@ -50,7 +61,7 @@ class FileTreeView extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(
                                   vertical: AppConstants.spaceSm),
                               children: tree.children
-                                  .map((child) => _FileTreeEntry(
+                                  .map((child) => FileTreeEntry(
                                         key: ValueKey(child.relativePath),
                                         node: child,
                                         depth: 0,
@@ -64,195 +75,11 @@ class FileTreeView extends StatelessWidget {
   }
 }
 
-class _TreeHeader extends StatelessWidget {
-  final ProjectModel? project;
-
-  const _TreeHeader({required this.project});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppConstants.spaceMd,
-        AppConstants.spaceMd,
-        AppConstants.spaceSm,
-        AppConstants.spaceSm,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              project?.name ?? AppConstants.appName,
-              style: Theme.of(context).textTheme.titleSmall,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          IconButton(
-            tooltip: 'New file',
-            icon: const Icon(Icons.note_add_outlined, size: 20),
-            onPressed: project == null
-                ? null
-                : () => _createAtRoot(context, isFolder: false),
-          ),
-          IconButton(
-            tooltip: 'New folder',
-            icon: const Icon(Icons.create_new_folder_outlined, size: 20),
-            onPressed: project == null
-                ? null
-                : () => _createAtRoot(context, isFolder: true),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _createAtRoot(BuildContext context,
-      {required bool isFolder}) async {
-    final fileProvider = context.read<FileProvider>();
-    final name = await _promptForName(context,
-        title: isFolder ? 'New folder' : 'New file');
-    if (name == null || name.isEmpty) return;
-    if (isFolder) {
-      await fileProvider.createFolder('', name);
-    } else {
-      await fileProvider.createFile('', name);
-      // The new file is open in the editor now: get the drawer out of the way.
-      if (context.mounted) _closeDrawerIfOpen(context);
-    }
-  }
-}
-
-class _FileTreeEntry extends StatelessWidget {
-  final ProjectFileNode node;
-  final int depth;
-
-  const _FileTreeEntry({super.key, required this.node, required this.depth});
-
-  @override
-  Widget build(BuildContext context) {
-    final fileProvider = context.watch<FileProvider>();
-
-    if (node.isFile) {
-      final isOpen = fileProvider.openTabs.contains(node.relativePath);
-      final isActive = fileProvider.activeTab == node.relativePath;
-      return _EntryRow(
-        icon: Icons.description_outlined,
-        label: node.name,
-        depth: depth,
-        selected: isActive,
-        // Files that are open in a background tab (but not the active
-        // one) get a lighter indicator than the fully-selected style.
-        openIndicator: isOpen && !isActive,
-        onTap: () {
-          fileProvider.openFile(node.relativePath);
-          _closeDrawerIfOpen(context);
-        },
-        onLongPress: () => _showEntryActions(context, node, isFolder: false),
-      );
-    }
-
-    // Whether a folder is open is kept in FolderExpansion, not here: this
-    // widget is rebuilt (and the whole tree even moves between drawer and
-    // sidebar), and a folder the user closed must stay closed.
-    final folderKey = '${fileProvider.currentProject?.id}/${node.relativePath}';
-    final expanded = context
-        .select<FolderExpansion, bool>((state) => state.isExpanded(folderKey));
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _EntryRow(
-          icon: expanded ? Icons.folder_open_outlined : Icons.folder_outlined,
-          trailingIcon: expanded
-              ? Icons.expand_more_rounded
-              : Icons.chevron_right_rounded,
-          label: node.name,
-          depth: depth,
-          onTap: () => context.read<FolderExpansion>().toggle(folderKey),
-          onLongPress: () => _showEntryActions(context, node, isFolder: true),
-        ),
-        if (expanded)
-          ...node.children.map(
-            (child) => _FileTreeEntry(
-              key: ValueKey(child.relativePath),
-              node: child,
-              depth: depth + 1,
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _EntryRow extends StatelessWidget {
-  final IconData icon;
-  final IconData? trailingIcon;
-  final String label;
-  final int depth;
-  final bool selected;
-  final VoidCallback onTap;
-  final VoidCallback? onLongPress;
-  final bool openIndicator;
-
-  const _EntryRow({
-    required this.icon,
-    this.trailingIcon,
-    required this.label,
-    required this.depth,
-    this.selected = false,
-    this.openIndicator = false,
-    required this.onTap,
-    this.onLongPress,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: selected
-          ? scheme.primaryContainer.withValues(alpha: 0.4)
-          : Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Padding(
-          padding: EdgeInsets.only(
-            left: AppConstants.spaceMd + depth * AppConstants.spaceLg,
-            right: AppConstants.spaceMd,
-            top: AppConstants.spaceSm,
-            bottom: AppConstants.spaceSm,
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 18, color: scheme.onSurfaceVariant),
-              const SizedBox(width: AppConstants.spaceSm),
-              Expanded(
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                    color: selected ? scheme.primary : scheme.onSurface,
-                  ),
-                ),
-              ),
-              if (openIndicator)
-                Container(
-                  width: 5,
-                  height: 5,
-                  margin: const EdgeInsets.only(right: 4),
-                  decoration: BoxDecoration(
-                      color: scheme.onSurfaceVariant, shape: BoxShape.circle),
-                ),
-              if (trailingIcon != null)
-                Icon(trailingIcon, size: 16, color: scheme.onSurfaceVariant),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+void _transferSelection(BuildContext context, {required bool copy}) {
+  final files = context.read<FileProvider>();
+  final entries =
+      context.read<TreeSelection>().entriesFor(files.currentProject?.id);
+  transferWithDialog(context, files, entries, copy: copy);
 }
 
 class _EmptyState extends StatelessWidget {
@@ -274,116 +101,5 @@ class _EmptyState extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-// ---- Shared prompts (used by both the header's + buttons and the
-// long-press menu below) ----
-
-Future<String?> _promptForName(
-  BuildContext context, {
-  required String title,
-  String initialValue = '',
-}) =>
-    showNameDialog(context, title: title, initialValue: initialValue);
-
-/// Picking (or creating) a file closes the drawer. On wide screens the tree
-/// is a sidebar: there is no drawer, so there is nothing to close.
-void _closeDrawerIfOpen(BuildContext context) {
-  final scaffold = Scaffold.maybeOf(context);
-  if (scaffold != null && scaffold.isDrawerOpen) scaffold.closeDrawer();
-}
-
-Future<bool?> _confirmDelete(BuildContext context, String name) {
-  return showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text('Delete'),
-      content: Text('Delete "$name"? This cannot be undone.'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(dialogContext, false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: Theme.of(dialogContext).colorScheme.error,
-          ),
-          onPressed: () => Navigator.pop(dialogContext, true),
-          child: const Text('Delete'),
-        ),
-      ],
-    ),
-  );
-}
-
-Future<void> _showEntryActions(
-  BuildContext context,
-  ProjectFileNode node, {
-  required bool isFolder,
-}) async {
-  final fileProvider = context.read<FileProvider>();
-
-  final action = await showModalBottomSheet<String>(
-    context: context,
-    builder: (sheetContext) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isFolder) ...[
-            ListTile(
-              leading: const Icon(Icons.note_add_outlined),
-              title: const Text('New file here'),
-              onTap: () => Navigator.pop(sheetContext, 'new_file'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.create_new_folder_outlined),
-              title: const Text('New folder here'),
-              onTap: () => Navigator.pop(sheetContext, 'new_folder'),
-            ),
-          ],
-          ListTile(
-            leading: const Icon(Icons.drive_file_rename_outline),
-            title: const Text('Rename'),
-            onTap: () => Navigator.pop(sheetContext, 'rename'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.delete_outline),
-            title: const Text('Delete'),
-            onTap: () => Navigator.pop(sheetContext, 'delete'),
-          ),
-        ],
-      ),
-    ),
-  );
-
-  if (!context.mounted || action == null) return;
-
-  switch (action) {
-    case 'new_file':
-      final name = await _promptForName(context, title: 'New file');
-      if (name != null && name.isNotEmpty) {
-        await fileProvider.createFile(node.relativePath, name);
-        // The new file is open in the editor now: close the drawer.
-        if (context.mounted) _closeDrawerIfOpen(context);
-      }
-    case 'new_folder':
-      final name = await _promptForName(context, title: 'New folder');
-      if (name != null && name.isNotEmpty) {
-        await fileProvider.createFolder(node.relativePath, name);
-      }
-    case 'rename':
-      final name = await _promptForName(context,
-          title: 'Rename', initialValue: node.name);
-      if (name != null && name.isNotEmpty && name != node.name) {
-        await fileProvider.renameEntry(node.relativePath, name,
-            isFolder: isFolder);
-      }
-    case 'delete':
-      if (!context.mounted) return;
-      final confirmed = await _confirmDelete(context, node.name);
-      if (confirmed == true) {
-        await fileProvider.deleteEntry(node.relativePath, isFolder: isFolder);
-      }
   }
 }

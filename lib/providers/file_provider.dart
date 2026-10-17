@@ -5,8 +5,10 @@ import 'package:path/path.dart' as p;
 
 import '../models/project_file_node.dart';
 import '../models/project_model.dart';
+import '../models/tree_entry_ref.dart';
 import '../services/file_manager_service.dart';
 import '../utils/constants.dart';
+import '../utils/project_tree.dart';
 
 /// Project/file state for the whole app — now tracking multiple open
 /// tabs (Phase 6) instead of Phase 5's single open file. Deliberately
@@ -41,6 +43,13 @@ class FileProvider extends ChangeNotifier {
   bool get hasActiveTab => _currentProject != null && _activeTab != null;
   String? get activeFileName => _activeTab?.split('/').last;
   bool isDirty(String relativePath) => _dirtyTabs[relativePath] ?? false;
+
+  /// The folder of the active file (`` — the project root — when no file
+  /// is open or the file sits directly in the root).
+  String get activeFolder {
+    final tab = _activeTab;
+    return tab == null ? '' : parentOf(tab);
+  }
 
   // ---- Projects ----
 
@@ -110,6 +119,10 @@ class FileProvider extends ChangeNotifier {
     _fileTree = await _service.listFileTree(project);
     notifyListeners();
   }
+
+  /// A fresh scan of [project]'s files (any project, not only the open one).
+  Future<ProjectFileNode> treeOf(ProjectModel project) =>
+      _service.listFileTree(project);
 
   Future<String> readFile(String relativePath) async {
     final project = _currentProject;
@@ -227,6 +240,25 @@ class FileProvider extends ChangeNotifier {
     openFile(newPath);
   }
 
+  /// Creates a file with [content] (an imported one) in
+  /// [parentRelativePath] — the project root by default — and opens it.
+  Future<void> importFile(
+    String fileName,
+    String content, {
+    String parentRelativePath = '',
+  }) async {
+    final project = _currentProject;
+    if (project == null) return;
+    final newPath = await _service.importFile(
+      project,
+      parentRelativePath,
+      fileName,
+      content,
+    );
+    await refreshFileTree();
+    openFile(newPath);
+  }
+
   Future<void> createFolder(
     String parentRelativePath,
     String folderName,
@@ -254,22 +286,152 @@ class FileProvider extends ChangeNotifier {
       newName,
       isFolder: isFolder,
     );
+    _followToNewPath(relativePath, newPath, isFolder: isFolder);
+    await refreshFileTree();
+  }
 
-    if (!isFolder) {
-      _renameTabReference(relativePath, newPath);
-    } else {
-      final oldPrefix = '$relativePath/';
-      final newPrefix = '$newPath/';
-      for (final oldTabPath in List<String>.from(_openTabs)) {
-        if (oldTabPath.startsWith(oldPrefix)) {
-          _renameTabReference(
-            oldTabPath,
-            newPrefix + oldTabPath.substring(oldPrefix.length),
-          );
+  /// Moves a file or folder into [destinationRelativePath] (`` for the
+  /// project root) of [toProject] (this project when null). Tabs open on it
+  /// (or below it) follow it, or close when it leaves this project.
+  Future<void> moveEntry(
+    String relativePath,
+    String destinationRelativePath, {
+    required bool isFolder,
+    ProjectModel? toProject,
+  }) async {
+    await _moveOne(relativePath, destinationRelativePath,
+        isFolder: isFolder, toProject: toProject);
+    await refreshFileTree();
+  }
+
+  /// Copies a file or folder like [moveEntry] moves it; the original and its
+  /// tabs stay as they are.
+  Future<void> copyEntry(
+    String relativePath,
+    String destinationRelativePath, {
+    required bool isFolder,
+    ProjectModel? toProject,
+  }) async {
+    await _copyOne(relativePath, destinationRelativePath,
+        isFolder: isFolder, toProject: toProject);
+    await refreshFileTree();
+  }
+
+  /// Copies or moves several entries into one folder. One that fails does
+  /// not stop the others; returns how many failed.
+  Future<int> transferEntries(
+    List<TreeEntryRef> entries,
+    String destinationRelativePath, {
+    required bool copy,
+    ProjectModel? toProject,
+  }) async {
+    var failed = 0;
+    for (final entry in entries) {
+      try {
+        if (copy) {
+          await _copyOne(entry.path, destinationRelativePath,
+              isFolder: entry.isFolder, toProject: toProject);
+        } else {
+          await _moveOne(entry.path, destinationRelativePath,
+              isFolder: entry.isFolder, toProject: toProject);
         }
+      } on Exception {
+        failed++;
+      } on ArgumentError {
+        failed++;
       }
     }
     await refreshFileTree();
+    return failed;
+  }
+
+  Future<void> _moveOne(
+    String relativePath,
+    String destinationRelativePath, {
+    required bool isFolder,
+    ProjectModel? toProject,
+  }) async {
+    final project = _currentProject;
+    if (project == null) return;
+
+    // Write pending edits first, so no save is left waiting for the old path
+    // (it would write the file back where it used to be).
+    await _flushTabsOn(relativePath, isFolder: isFolder);
+
+    final leaves = _isOtherProject(toProject);
+    final newPath = await _service.moveEntry(
+      project,
+      relativePath,
+      destinationRelativePath,
+      isFolder: isFolder,
+      toProject: leaves ? toProject : null,
+    );
+    if (leaves) {
+      for (final tab in _tabsOn(relativePath, isFolder: isFolder)) {
+        await closeTab(tab, flush: false); // already written above
+      }
+    } else {
+      _followToNewPath(relativePath, newPath, isFolder: isFolder);
+    }
+  }
+
+  Future<void> _copyOne(
+    String relativePath,
+    String destinationRelativePath, {
+    required bool isFolder,
+    ProjectModel? toProject,
+  }) async {
+    final project = _currentProject;
+    if (project == null) return;
+    // The copy should contain what the user sees, saved or not.
+    await _flushTabsOn(relativePath, isFolder: isFolder);
+    await _service.copyEntry(
+      project,
+      relativePath,
+      destinationRelativePath,
+      isFolder: isFolder,
+      toProject: _isOtherProject(toProject) ? toProject : null,
+    );
+  }
+
+  bool _isOtherProject(ProjectModel? target) =>
+      target != null && target.id != _currentProject?.id;
+
+  /// The open tabs on [relativePath] (or, for a folder, below it).
+  List<String> _tabsOn(String relativePath, {required bool isFolder}) => [
+        for (final tab in _openTabs)
+          if (tab == relativePath ||
+              (isFolder && tab.startsWith('$relativePath/')))
+            tab,
+      ];
+
+  Future<void> _flushTabsOn(String relativePath, {required bool isFolder}) async {
+    for (final tab in _tabsOn(relativePath, isFolder: isFolder)) {
+      await flushPendingSave(tab);
+    }
+  }
+
+  /// Open tabs on [oldPath] (or, for a folder, below it) now live at
+  /// [newPath]: their paths and per-tab save state move along.
+  void _followToNewPath(
+    String oldPath,
+    String newPath, {
+    required bool isFolder,
+  }) {
+    if (!isFolder) {
+      _renameTabReference(oldPath, newPath);
+      return;
+    }
+    final oldPrefix = '$oldPath/';
+    final newPrefix = '$newPath/';
+    for (final oldTabPath in List<String>.from(_openTabs)) {
+      if (oldTabPath.startsWith(oldPrefix)) {
+        _renameTabReference(
+          oldTabPath,
+          newPrefix + oldTabPath.substring(oldPrefix.length),
+        );
+      }
+    }
   }
 
   void _renameTabReference(String oldPath, String newPath) {

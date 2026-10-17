@@ -131,6 +131,15 @@ class FileManagerService {
     ProjectModel project,
     String parentRelativePath,
     String fileName,
+  ) =>
+      importFile(project, parentRelativePath, fileName, _defaultFileContent);
+
+  /// Like [createFile] but with the given [content] (used by Import).
+  Future<String> importFile(
+    ProjectModel project,
+    String parentRelativePath,
+    String fileName,
+    String content,
   ) async {
     var safeName = _sanitizeName(fileName, fallback: 'untitled');
     if (!safeName.endsWith('.dart')) safeName = '$safeName.dart';
@@ -140,7 +149,7 @@ class FileManagerService {
 
     final uniqueName = await _uniqueFileName(parentDir, safeName);
     final file = File(p.join(parentDir.path, uniqueName));
-    await file.writeAsString(_defaultFileContent);
+    await file.writeAsString(content);
 
     return p.join(parentRelativePath, uniqueName).replaceAll('\\', '/');
   }
@@ -181,6 +190,85 @@ class FileManagerService {
       await File(absolutePath).rename(newAbsolutePath);
     }
     return p.relative(newAbsolutePath, from: project.rootPath).replaceAll('\\', '/');
+  }
+
+  /// Moves a file or folder into [destinationRelativePath] (empty string
+  /// for the project root) of [toProject] (this project when null), keeping
+  /// its name; a numbered suffix is added if that name is already taken
+  /// there. Returns the new relative path inside the target project.
+  ///
+  /// Moving something into the folder it is already in changes nothing, and
+  /// a folder cannot be moved into itself or below itself ([ArgumentError]).
+  Future<String> moveEntry(
+    ProjectModel project,
+    String relativePath,
+    String destinationRelativePath, {
+    required bool isFolder,
+    ProjectModel? toProject,
+  }) async {
+    final target = toProject ?? project;
+    final sameProject = target.rootPath == project.rootPath;
+    if (isFolder && sameProject && _isInside(destinationRelativePath, relativePath)) {
+      throw ArgumentError('A folder cannot be moved into itself.');
+    }
+
+    final source = p.join(project.rootPath, relativePath);
+    final destination = Directory(p.join(target.rootPath, destinationRelativePath));
+    if (sameProject && p.equals(p.dirname(source), destination.path)) {
+      return relativePath;
+    }
+    if (!await destination.exists()) await destination.create(recursive: true);
+
+    final uniqueName = await _uniqueName(destination, p.basename(relativePath), isFolder: isFolder);
+    final targetPath = p.join(destination.path, uniqueName);
+
+    try {
+      if (isFolder) {
+        await Directory(source).rename(targetPath);
+      } else {
+        await File(source).rename(targetPath);
+      }
+    } on FileSystemException {
+      // Renaming can fail when source and target are on different drives:
+      // copy, then remove the original.
+      await _copyTo(source, targetPath, isFolder: isFolder);
+      if (isFolder) {
+        await Directory(source).delete(recursive: true);
+      } else {
+        await File(source).delete();
+      }
+    }
+    return p.relative(targetPath, from: target.rootPath).replaceAll('\\', '/');
+  }
+
+  /// Copies a file or folder (with everything inside it) into
+  /// [destinationRelativePath] of [toProject] (this project when null). The
+  /// original stays. A numbered suffix is added if the name is already taken
+  /// there, so copying into the folder it is already in makes a duplicate.
+  /// Returns the new relative path inside the target project.
+  ///
+  /// A folder cannot be copied into itself or below itself ([ArgumentError]).
+  Future<String> copyEntry(
+    ProjectModel project,
+    String relativePath,
+    String destinationRelativePath, {
+    required bool isFolder,
+    ProjectModel? toProject,
+  }) async {
+    final target = toProject ?? project;
+    final sameProject = target.rootPath == project.rootPath;
+    if (isFolder && sameProject && _isInside(destinationRelativePath, relativePath)) {
+      throw ArgumentError('A folder cannot be copied into itself.');
+    }
+
+    final source = p.join(project.rootPath, relativePath);
+    final destination = Directory(p.join(target.rootPath, destinationRelativePath));
+    if (!await destination.exists()) await destination.create(recursive: true);
+
+    final uniqueName = await _uniqueName(destination, p.basename(relativePath), isFolder: isFolder);
+    final targetPath = p.join(destination.path, uniqueName);
+    await _copyTo(source, targetPath, isFolder: isFolder);
+    return p.relative(targetPath, from: target.rootPath).replaceAll('\\', '/');
   }
 
   Future<void> deleteEntry(
@@ -238,5 +326,32 @@ class FileManagerService {
       candidate = '$base ($attempt)$ext';
     }
     return candidate;
+  }
+
+  /// True if [path] is [folder] itself or lies below it.
+  bool _isInside(String path, String folder) =>
+      path == folder || path.startsWith('$folder/');
+
+  Future<String> _uniqueName(Directory parent, String name, {required bool isFolder}) =>
+      isFolder ? _uniqueDirName(parent, name) : _uniqueFileName(parent, name);
+
+  Future<void> _copyTo(String source, String targetPath, {required bool isFolder}) async {
+    if (isFolder) {
+      await _copyDirectory(Directory(source), Directory(targetPath));
+    } else {
+      await File(source).copy(targetPath);
+    }
+  }
+
+  Future<void> _copyDirectory(Directory from, Directory to) async {
+    await to.create(recursive: true);
+    await for (final entity in from.list()) {
+      final name = p.basename(entity.path);
+      if (entity is Directory) {
+        await _copyDirectory(entity, Directory(p.join(to.path, name)));
+      } else if (entity is File) {
+        await entity.copy(p.join(to.path, name));
+      }
+    }
   }
 }

@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 import 'providers/console_provider.dart';
 import 'providers/file_provider.dart';
 import 'providers/folder_expansion_provider.dart';
+import 'providers/folder_focus_provider.dart';
 import 'providers/runner_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/tree_selection_provider.dart';
 import 'screens/home_screen.dart';
 import 'services/open_files_tracker.dart';
 import 'utils/constants.dart';
@@ -38,6 +40,14 @@ class DartLabApp extends StatelessWidget {
         // Which folders of the file tree the user has closed.
         ChangeNotifierProvider(
           create: (_) => FolderExpansion(),
+        ),
+        // The folder last tapped in the file tree (highlighted; import goes
+        // there), and the entries ticked while selecting several.
+        ChangeNotifierProvider(
+          create: (_) => FolderFocus(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => TreeSelection(),
         ),
         // Remembers the open tabs of each project. It only watches
         // FileProvider (no change needed there); `lazy: false` so it is

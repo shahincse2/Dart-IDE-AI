@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -44,9 +45,12 @@ class FileShareService {
 
       if (picked == null) return null; // ইউজার ক্যান্সেল করেছে
 
-      // PlatformFile.readAsBytes() ব্যবহার করে ফাইল কনটেন্ট পড়া হয়।
-      // এটি সব প্ল্যাটফর্মে (মোবাইল, ডেস্কটপ, ওয়েব) কাজ করে।
-      final content = String.fromCharCodes(await picked.readAsBytes());
+      // Files are UTF-8. (String.fromCharCodes would turn every non-ASCII
+      // character, such as Bengali text in a comment, into garbage.)
+      final content = utf8.decode(
+        await picked.readAsBytes(),
+        allowMalformed: true,
+      );
       final name = picked.name;
 
       return (content: content, name: name);
