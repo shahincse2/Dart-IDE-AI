@@ -19,6 +19,7 @@ import '../widgets/coding_toolbar.dart';
 import '../widgets/completion_overlay.dart';
 import '../widgets/console_panel.dart';
 import '../widgets/editor_app_bar_title.dart';
+import '../widgets/export_action.dart';
 import '../widgets/file_tab_bar.dart';
 import '../widgets/file_tree.dart';
 import '../widgets/file_tree/import_action.dart';
@@ -108,15 +109,18 @@ class _EditorScreenState extends State<EditorScreen> {
     _lastSeenRunnerEventCount = events.length;
   }
 
+  /// Saves the file ON THE DEVICE (Downloads/DartLab on Android) and says where
+  /// (see [exportWithMessage]).
   Future<void> _handleExport() async {
     final activePath = _fileProvider.activeTab;
     final activeController =
         activePath != null ? _controllers[activePath] : null;
     if (activeController == null || activePath == null) return;
-    final fileName = activePath.split('/').last;
-    await _fileShareService.exportDartFile(
+    await exportWithMessage(
+      context,
       content: activeController.text,
-      fileName: fileName,
+      fileName: activePath.split('/').last,
+      service: _fileShareService,
     );
   }
 

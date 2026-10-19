@@ -90,6 +90,10 @@ class ConsoleHeader extends StatelessWidget {
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
+                  // A SnackBar with an action stays until dismissed unless told
+                  // not to: let this one go away by itself.
+                  persist: false,
+                  duration: const Duration(seconds: 5),
                   content: const Text('Output saved'),
                   action: SnackBarAction(
                     label: 'Open folder',

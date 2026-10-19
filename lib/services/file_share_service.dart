@@ -1,34 +1,62 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:path/path.dart' as p;
-import 'package:share_plus/share_plus.dart';
+
+import 'downloads_saver.dart';
+
+/// What happened to an export.
+class ExportOutcome {
+  const ExportOutcome._(this.savedTo, this.failed);
+
+  /// Saved; [where] says where, for the user to read.
+  const ExportOutcome.saved(String where) : this._(where, false);
+
+  /// The user closed the save dialog: nothing to report.
+  const ExportOutcome.cancelled() : this._(null, false);
+
+  /// It could not be saved.
+  const ExportOutcome.failed() : this._(null, true);
+
+  final String? savedTo;
+  final bool failed;
+}
 
 class FileShareService {
-  /// Exports (shares) a .dart file via the OS share sheet.
-  Future<bool> exportDartFile({
+  FileShareService({DownloadsSaver? downloads})
+      : _downloads = downloads ?? DownloadsSaver();
+
+  final DownloadsSaver _downloads;
+
+  /// Saves a .dart file ON THE DEVICE, never to other apps (sharing is a
+  /// separate menu item).
+  ///
+  /// On Android it goes straight into Downloads/DartLab: the system save
+  /// dialog is not used, because on some phones that dialog crashes (and the
+  /// app with it). Android 9 and older, and other systems, use the system
+  /// save dialog.
+  Future<ExportOutcome> exportDartFile({
     required String content,
     required String fileName,
   }) async {
+    final bytes = Uint8List.fromList(utf8.encode(content));
     try {
-      final tempDir = Directory.systemTemp;
-      final file = File(p.join(tempDir.path, fileName));
-      await file.writeAsString(content);
-
-      // share_plus 13.x-এ স্ট্যাটিক Share.shareXFiles() ডেপ্রিকেটেড।
-      // নতুন API হলো SharePlus.instance.share(ShareParams(...))।
-      final result = await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(file.path, mimeType: 'text/plain')],
-          subject: fileName,
-        ),
-      );
-
-      return result.status == ShareResultStatus.success ||
-          result.status == ShareResultStatus.dismissed;
+      if (_downloads.isAvailable) {
+        try {
+          final where = await _downloads.save(fileName: fileName, bytes: bytes);
+          return where == null
+              ? const ExportOutcome.failed()
+              : ExportOutcome.saved(where);
+        } on UnsupportedError {
+          // Android 9 or older: fall through to the save dialog.
+        }
+      }
+      final saved = await FilePicker.saveFile(fileName: fileName, bytes: bytes);
+      return saved == null
+          ? const ExportOutcome.cancelled()
+          : ExportOutcome.saved(saved.toString());
     } catch (_) {
-      return false;
+      return const ExportOutcome.failed();
     }
   }
 

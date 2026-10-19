@@ -24,11 +24,21 @@ void main() {
         consoleHeightFor(wanted: wanted, minOpen: min, maxHeight: max);
 
     test('keeps the height the user chose', () => expect(heightFor(300), 300));
-    test('never below the minimum', () => expect(heightFor(50), 120));
+
+    test('never below what the console\'s own parts need', () {
+      expect(heightFor(50), kConsoleMinUsableHeight);
+      expect(heightFor(130), kConsoleMinUsableHeight);
+    });
+
+    test('a larger configured minimum is respected', () {
+      expect(heightFor(50, min: 200), 200);
+    });
+
     test('never above the maximum', () => expect(heightFor(900), 700));
 
-    test('a maximum smaller than the minimum wins', () {
-      expect(heightFor(300, min: 120, max: 100), 100);
+    test('a maximum below the least that fits is ignored', () {
+      expect(heightFor(300, max: 100), kConsoleMinUsableHeight);
+      expect(heightFor(300, min: 220, max: 100), 220);
     });
   });
 }

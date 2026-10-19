@@ -6,6 +6,7 @@ import '../../models/tree_entry_ref.dart';
 import '../../providers/file_provider.dart';
 import '../../providers/tree_selection_provider.dart';
 import '../../utils/transfer_destinations.dart';
+import '../overlay_message.dart';
 import 'transfer_dialog.dart';
 
 /// "Copy to…" / "Move to…": asks where to put [chosen] (a project and a
@@ -20,7 +21,8 @@ Future<void> transferWithDialog(
   final entries = withoutNested(chosen);
   if (current == null || entries.isEmpty) return;
   final selection = context.read<TreeSelection>();
-  final messenger = ScaffoldMessenger.of(context);
+  // A SnackBar would sit under the open drawer: use the overlay message.
+  final overlay = Overlay.of(context, rootOverlay: true);
 
   final target = await showTransferDialog(
     context,
@@ -45,9 +47,7 @@ Future<void> transferWithDialog(
     toProject: target.project,
   );
   selection.clear();
-  messenger.showSnackBar(
-    SnackBar(content: Text(_result(entries.length, failed, copy: copy))),
-  );
+  showOverlayMessage(overlay, _result(entries.length, failed, copy: copy));
 }
 
 /// The known projects, with [current] among them even if the list is stale.
