@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:dartlab/services/downloads_saver.dart';
 import 'package:flutter/services.dart';
@@ -21,7 +20,8 @@ void main() {
   });
 
   group('DownloadsSaver.save', () {
-    test('sends the name, content, type and folder, and returns where it went', () async {
+    test('sends the name, content, type and folder, and returns where it went',
+        () async {
       MethodCall? received;
       answerWith((call) async {
         received = call;
@@ -38,20 +38,22 @@ void main() {
       final args = received!.arguments as Map;
       expect(args['fileName'], 'main.dart');
       expect(utf8.decode(args['bytes'] as Uint8List), '// শুভ');
-      expect(args['mimeType'], 'text/plain');
+      expect(args['mimeType'],
+          'application/octet-stream'); // keeps main.dart as main.dart
       expect(args['subfolder'], 'DartLab');
     });
 
     test('a failure on the phone gives null', () async {
       answerWith((call) async => throw PlatformException(code: 'save_failed'));
 
-      final where = await DownloadsSaver()
-          .save(fileName: 'a.dart', bytes: Uint8List(0));
+      final where =
+          await DownloadsSaver().save(fileName: 'a.dart', bytes: Uint8List(0));
 
       expect(where, isNull);
     });
 
-    test('a phone too old for it says so, so the caller can use another way', () async {
+    test('a phone too old for it says so, so the caller can use another way',
+        () async {
       answerWith((call) async => throw PlatformException(code: 'unsupported'));
 
       expect(
@@ -61,8 +63,8 @@ void main() {
     });
 
     test('with no native side at all (not Android) it gives null', () async {
-      final where = await DownloadsSaver()
-          .save(fileName: 'a.dart', bytes: Uint8List(0));
+      final where =
+          await DownloadsSaver().save(fileName: 'a.dart', bytes: Uint8List(0));
 
       expect(where, isNull);
     });

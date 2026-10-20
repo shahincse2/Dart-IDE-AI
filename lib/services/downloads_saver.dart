@@ -1,5 +1,4 @@
 import 'dart:io' show Platform;
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 
@@ -20,7 +19,8 @@ class DownloadsSaver {
   Future<String?> save({
     required String fileName,
     required Uint8List bytes,
-    String mimeType = 'text/plain',
+    // Not text/plain: for a known type Android adds its own extension (main.dart.txt).
+    String mimeType = 'application/octet-stream',
     String subfolder = 'DartLab',
   }) async {
     try {
@@ -32,7 +32,8 @@ class DownloadsSaver {
       });
     } on PlatformException catch (error) {
       if (error.code == 'unsupported') {
-        throw UnsupportedError(error.message ?? 'Saving to Downloads is not supported');
+        throw UnsupportedError(
+            error.message ?? 'Saving to Downloads is not supported');
       }
       return null;
     } on MissingPluginException {

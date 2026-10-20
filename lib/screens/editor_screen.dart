@@ -552,6 +552,10 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
         PopupMenuButton<VoidCallback>(
           tooltip: 'More',
+          // Closing a menu hands focus back to the editor, and the keyboard
+          // with it, even if the user had hidden it. Nothing in this menu
+          // needs the keyboard, so let go of the focus when it opens.
+          onOpened: () => FocusManager.instance.primaryFocus?.unfocus(),
           onSelected: (action) => action(),
           itemBuilder: (context) => [
             PopupMenuItem(
@@ -710,35 +714,41 @@ class _EditorBody extends StatelessWidget {
     final controller = this.controller;
     final undoController = this.undoController;
 
-    return Column(
-      children: [
-        const FileTabBar(),
-        if (showFindReplace && controller != null)
-          FindReplaceBar(
-            key: ValueKey(controller),
-            controller: controller,
-            onClose: onCloseFindReplace,
-            initiallyExpanded: findReplaceExpanded,
-          ),
-        Expanded(
-          child: controller != null
-              ? CodeEditor(
-                  controller: controller,
-                  undoController: undoController,
-                  fontSize: fontSize,
-                  wordWrap: wordWrap,
-                )
-              : const _NoFileOpenPlaceholder(),
-        ),
-        if (controller != null && undoController != null) ...[
-          CompletionOverlay(controller: controller),
-          CodingToolbar(
-            controller: controller,
-            undoController: undoController,
-          ),
-        ],
-        const ConsolePanel(),
-      ],
+    // The console is told how much room this screen's body really has, so that
+    // with the keyboard up it never pushes the other parts out of the screen.
+    return LayoutBuilder(
+      builder: (context, box) {
+        return Column(
+          children: [
+            const FileTabBar(),
+            if (showFindReplace && controller != null)
+              FindReplaceBar(
+                key: ValueKey(controller),
+                controller: controller,
+                onClose: onCloseFindReplace,
+                initiallyExpanded: findReplaceExpanded,
+              ),
+            Expanded(
+              child: controller != null
+                  ? CodeEditor(
+                      controller: controller,
+                      undoController: undoController,
+                      fontSize: fontSize,
+                      wordWrap: wordWrap,
+                    )
+                  : const _NoFileOpenPlaceholder(),
+            ),
+            if (controller != null && undoController != null) ...[
+              CompletionOverlay(controller: controller),
+              CodingToolbar(
+                controller: controller,
+                undoController: undoController,
+              ),
+            ],
+            ConsolePanel(availableHeight: box.maxHeight),
+          ],
+        );
+      },
     );
   }
 }

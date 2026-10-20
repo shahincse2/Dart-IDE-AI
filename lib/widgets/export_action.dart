@@ -18,8 +18,16 @@ Future<void> exportWithMessage(
 
   final savedTo = outcome.savedTo;
   if (savedTo != null) {
-    showOverlayMessage(overlay, 'Saved to $savedTo');
+    showOverlayMessage(
+      overlay,
+      'Saved to $savedTo',
+      duration: const Duration(seconds: 6),
+    );
   } else if (outcome.failed) {
-    showOverlayMessage(overlay, 'Could not save "$fileName"');
+    showOverlayMessage(
+      overlay,
+      'Could not save "$fileName"',
+      duration: const Duration(seconds: 6),
+    );
   }
 }

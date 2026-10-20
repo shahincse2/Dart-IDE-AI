@@ -40,7 +40,7 @@ Future<void> exportWith(WidgetTester tester, ExportOutcome outcome) async {
 }
 
 Future<void> letMessageGo(WidgetTester tester) async {
-  await tester.pump(const Duration(seconds: 4));
+  await tester.pump(const Duration(seconds: 7));
   await tester.pump();
 }
 

@@ -21,7 +21,13 @@ import 'console/console_stdin_bar.dart';
 ///   - stdin input bar (Phase stdin) — appears when interpreted code
 ///     calls readLineSync(), disappears once the user sends a reply
 class ConsolePanel extends StatelessWidget {
-  const ConsolePanel({super.key});
+  /// The height the screen's body has for all its parts, console included
+  /// (the editor screen passes its own constraint). With the keyboard up, the
+  /// console takes a share of THIS, so the screen's other parts always fit.
+  /// Null: not known, the screen height is used.
+  final double? availableHeight;
+
+  const ConsolePanel({super.key, this.availableHeight});
 
   @override
   Widget build(BuildContext context) {
@@ -31,15 +37,18 @@ class ConsolePanel extends StatelessWidget {
         context.select<SettingsProvider, String>((s) => s.editorThemeName);
     final scheme = editorSchemeFromName(themeName);
     final media = MediaQuery.of(context);
+    final bodyHeight = availableHeight ?? media.size.height;
     // How tall the console may be right now (less while the keyboard is up).
     final maxHeight = consoleMaxHeight(
       screenHeight: media.size.height,
-      keyboardHeight: media.viewInsets.bottom,
+      bodyHeight: bodyHeight,
+      keyboardVisible: media.viewInsets.bottom > 0,
     );
     // The drag handle keeps its old, keyboard-free limit.
     final dragLimit = consoleMaxHeight(
       screenHeight: media.size.height,
-      keyboardHeight: 0,
+      bodyHeight: bodyHeight,
+      keyboardVisible: false,
     );
     // Closing the console only hides it, so offer a way back to its output.
     final canReopen =
@@ -62,6 +71,7 @@ class ConsolePanel extends StatelessWidget {
                   wanted: console.height,
                   minOpen: AppConstants.consoleMinOpenHeight,
                   maxHeight: maxHeight,
+                  withInputBar: runner.waitingForStdin,
                 )
               : 0,
           decoration: BoxDecoration(

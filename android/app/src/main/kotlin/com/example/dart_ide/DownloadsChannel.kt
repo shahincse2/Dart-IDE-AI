@@ -41,7 +41,9 @@ class DownloadsChannel(
             return
         }
         try {
-            val mimeType = call.argument<String>("mimeType") ?: "text/plain"
+            // "application/octet-stream" keeps the name exactly as given. With a real
+            // type such as text/plain, Android adds its own extension (main.dart.txt).
+            val mimeType = call.argument<String>("mimeType") ?: "application/octet-stream"
             val subfolder = call.argument<String>("subfolder") ?: ""
             result.success(save(fileName, bytes, mimeType, subfolder))
         } catch (e: Exception) {
