@@ -157,8 +157,8 @@ class CompletionEngine {
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
-      label: 'readLineSync',
-      insertText: 'await readLineSync();',
+      label: 'stdout',
+      insertText: 'stdout',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
@@ -167,13 +167,18 @@ class CompletionEngine {
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
-      label: 'stdout',
-      insertText: 'stdout',
+      label: 'stdin',
+      insertText: 'stdin.readLineSync();',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
       label: 'stdin.readLineSync',
-      insertText: 'await readLineSync();',
+      insertText: 'stdin.readLineSync();',
+      kind: CompletionKind.snippet,
+    ),
+    CompletionItem(
+      label: 'readLineSync',
+      insertText: 'stdin.readLineSync();',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(

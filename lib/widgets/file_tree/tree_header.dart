@@ -57,8 +57,11 @@ class TreeHeader extends StatelessWidget {
   Future<void> _createAtRoot(BuildContext context,
       {required bool isFolder}) async {
     final fileProvider = context.read<FileProvider>();
-    final name = await showNameDialog(context,
-        title: isFolder ? 'New folder' : 'New file');
+    final name = await showNameDialog(
+      context,
+      title: isFolder ? 'New folder' : 'New file',
+      hint: isFolder ? 'Folder name' : 'File name',
+    );
     if (name == null || name.isEmpty) return;
     if (isFolder) {
       await fileProvider.createFolder('', name);

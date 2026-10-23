@@ -6,16 +6,17 @@ const double kConsoleInputBarMinHeight = 150;
 
 /// The tallest the console may be right now.
 ///
-/// Normally 70% of the screen. With the keyboard up there is little room, and
-/// the editor screen has other parts too (tabs, toolbar), so the console gets
-/// 30% of the height the screen's body really has ([bodyHeight]).
+/// At most 70% of the screen. When the screen knows how much room is left for
+/// the console ([roomHeight]: what the screen's body has, minus its other
+/// parts and a usable editor), the console takes no more than that. This
+/// holds with the keyboard up too, because the body is already smaller then.
 double consoleMaxHeight({
   required double screenHeight,
-  required double bodyHeight,
-  required bool keyboardVisible,
+  double? roomHeight,
 }) {
-  if (!keyboardVisible) return screenHeight * 0.7;
-  return math.max(0.0, bodyHeight) * 0.3;
+  final overall = screenHeight * 0.7;
+  if (roomHeight == null) return overall;
+  return math.min(overall, math.max(0.0, roomHeight));
 }
 
 /// The height to draw the console at: what the user chose ([wanted]), kept

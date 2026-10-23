@@ -97,7 +97,7 @@ Future<void> _newFile(
   FileProvider files,
   ProjectFileNode node,
 ) async {
-  final name = await showNameDialog(context, title: 'New file');
+  final name = await showNameDialog(context, title: 'New file', hint: 'File name');
   if (name == null || name.isEmpty) return;
   await files.createFile(node.relativePath, name);
   // The new file is open in the editor now: get the drawer out of the way.
@@ -109,7 +109,7 @@ Future<void> _newFolder(
   FileProvider files,
   ProjectFileNode node,
 ) async {
-  final name = await showNameDialog(context, title: 'New folder');
+  final name = await showNameDialog(context, title: 'New folder', hint: 'Folder name');
   if (name == null || name.isEmpty) return;
   await files.createFolder(node.relativePath, name);
 }
@@ -123,6 +123,7 @@ Future<void> _rename(
   final name = await showNameDialog(
     context,
     title: 'Rename',
+    hint: 'New name',
     initialValue: node.name,
   );
   if (name == null || name.isEmpty || name == node.name) return;

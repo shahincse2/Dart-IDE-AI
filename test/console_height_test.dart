@@ -3,25 +3,20 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('consoleMaxHeight', () {
-    test('without a keyboard: 70% of the screen', () {
-      expect(
-        consoleMaxHeight(screenHeight: 1000, bodyHeight: 800, keyboardVisible: false),
-        700,
-      );
+    test('without information about the room: 70% of the screen', () {
+      expect(consoleMaxHeight(screenHeight: 1000), 700);
     });
 
-    test('with the keyboard up: 30% of the height the body really has', () {
-      expect(
-        consoleMaxHeight(screenHeight: 1000, bodyHeight: 436.6, keyboardVisible: true),
-        closeTo(130.98, 0.001),
-      );
+    test('a smaller room (keyboard up) limits it', () {
+      expect(consoleMaxHeight(screenHeight: 1000, roomHeight: 148.6), 148.6);
     });
 
-    test('a body with no height leaves the console nothing', () {
-      expect(
-        consoleMaxHeight(screenHeight: 1000, bodyHeight: 0, keyboardVisible: true),
-        0,
-      );
+    test('a larger room does not raise it above 70% of the screen', () {
+      expect(consoleMaxHeight(screenHeight: 1000, roomHeight: 900), 700);
+    });
+
+    test('no room at all leaves the console nothing', () {
+      expect(consoleMaxHeight(screenHeight: 1000, roomHeight: -20), 0);
     });
   });
 

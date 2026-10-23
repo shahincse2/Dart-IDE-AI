@@ -53,14 +53,14 @@ class _NameDialogState extends State<_NameDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final hint = widget.hint;
     return AlertDialog(
       title: Text(widget.title),
       content: TextField(
         controller: _controller,
         autofocus: true,
         textInputAction: TextInputAction.done,
-        decoration: hint == null ? null : InputDecoration(hintText: hint),
+        // Always a decoration: with none at all the field has no underline.
+        decoration: InputDecoration(hintText: widget.hint),
         onSubmitted: (_) => _submit(),
       ),
       actions: [

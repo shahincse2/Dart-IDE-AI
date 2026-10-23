@@ -708,7 +708,7 @@ class _LineNumberGutter extends StatelessWidget {
         Positioned(
           // The number sits on the FIRST visual row of its line, so
           // wrapped continuation rows get no number.
-          top: lineTops[i] - scrollOffset,
+          top: lineTops[i] - scrollOffset + 1,
           left: 0,
           right: 0,
           height: lineHeight,

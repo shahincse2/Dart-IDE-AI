@@ -13,17 +13,12 @@ import '../services/print_service.dart';
 import '../utils/constants.dart';
 import '../utils/runner_error_parser.dart';
 import '../utils/themes.dart';
-import '../widgets/code_editor.dart';
 import '../widgets/code_editor_controller.dart';
-import '../widgets/coding_toolbar.dart';
-import '../widgets/completion_overlay.dart';
-import '../widgets/console_panel.dart';
 import '../widgets/editor_app_bar_title.dart';
+import '../widgets/editor_body.dart';
 import '../widgets/export_action.dart';
-import '../widgets/file_tab_bar.dart';
 import '../widgets/file_tree.dart';
 import '../widgets/file_tree/import_action.dart';
-import '../widgets/find_replace_bar.dart';
 import '../widgets/font_size_dialog.dart';
 import '../widgets/go_to_line_dialog.dart';
 import '../widgets/variable_inspector_panel.dart';
@@ -343,7 +338,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final isLandscape = AppConstants.isLandscape(context);
     final useSidebar = isTablet || isLandscape;
 
-    final editorArea = _EditorBody(
+    final editorArea = EditorBody(
       controller: activeController,
       undoController: activeUndoController,
       fontSize: settings.editorFontSize,
@@ -688,87 +683,4 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Size get preferredSize => const Size.fromHeight(AppConstants.appBarHeight);
-}
-
-class _EditorBody extends StatelessWidget {
-  final CodeEditorController? controller;
-  final UndoHistoryController? undoController;
-  final double fontSize;
-  final bool wordWrap;
-  final bool showFindReplace;
-  final bool findReplaceExpanded;
-  final VoidCallback onCloseFindReplace;
-
-  const _EditorBody({
-    required this.controller,
-    required this.undoController,
-    required this.fontSize,
-    required this.wordWrap,
-    required this.showFindReplace,
-    required this.findReplaceExpanded,
-    required this.onCloseFindReplace,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = this.controller;
-    final undoController = this.undoController;
-
-    // The console is told how much room this screen's body really has, so that
-    // with the keyboard up it never pushes the other parts out of the screen.
-    return LayoutBuilder(
-      builder: (context, box) {
-        return Column(
-          children: [
-            const FileTabBar(),
-            if (showFindReplace && controller != null)
-              FindReplaceBar(
-                key: ValueKey(controller),
-                controller: controller,
-                onClose: onCloseFindReplace,
-                initiallyExpanded: findReplaceExpanded,
-              ),
-            Expanded(
-              child: controller != null
-                  ? CodeEditor(
-                      controller: controller,
-                      undoController: undoController,
-                      fontSize: fontSize,
-                      wordWrap: wordWrap,
-                    )
-                  : const _NoFileOpenPlaceholder(),
-            ),
-            if (controller != null && undoController != null) ...[
-              CompletionOverlay(controller: controller),
-              CodingToolbar(
-                controller: controller,
-                undoController: undoController,
-              ),
-            ],
-            ConsolePanel(availableHeight: box.maxHeight),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _NoFileOpenPlaceholder extends StatelessWidget {
-  const _NoFileOpenPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppConstants.spaceLg),
-        child: Text(
-          'No file open.\nCreate or pick one from the file tree.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ),
-    );
-  }
 }

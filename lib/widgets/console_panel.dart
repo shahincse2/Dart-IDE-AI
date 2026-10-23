@@ -21,13 +21,13 @@ import 'console/console_stdin_bar.dart';
 ///   - stdin input bar (Phase stdin) — appears when interpreted code
 ///     calls readLineSync(), disappears once the user sends a reply
 class ConsolePanel extends StatelessWidget {
-  /// The height the screen's body has for all its parts, console included
-  /// (the editor screen passes its own constraint). With the keyboard up, the
-  /// console takes a share of THIS, so the screen's other parts always fit.
-  /// Null: not known, the screen height is used.
-  final double? availableHeight;
+  /// How much room the screen has left for the console (its body, minus its
+  /// other parts and a usable editor). The editor screen measures it, so the
+  /// console never pushes the other parts off the screen, with the keyboard
+  /// up or not. Null: not known, only the 70%-of-the-screen limit applies.
+  final double? roomHeight;
 
-  const ConsolePanel({super.key, this.availableHeight});
+  const ConsolePanel({super.key, this.roomHeight});
 
   @override
   Widget build(BuildContext context) {
@@ -36,20 +36,23 @@ class ConsolePanel extends StatelessWidget {
     final themeName =
         context.select<SettingsProvider, String>((s) => s.editorThemeName);
     final scheme = editorSchemeFromName(themeName);
-    final media = MediaQuery.of(context);
-    final bodyHeight = availableHeight ?? media.size.height;
-    // How tall the console may be right now (less while the keyboard is up).
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    // How tall the console may be right now.
     final maxHeight = consoleMaxHeight(
-      screenHeight: media.size.height,
-      bodyHeight: bodyHeight,
-      keyboardVisible: media.viewInsets.bottom > 0,
+      screenHeight: screenHeight,
+      roomHeight: roomHeight,
     );
-    // The drag handle keeps its old, keyboard-free limit.
-    final dragLimit = consoleMaxHeight(
-      screenHeight: media.size.height,
-      bodyHeight: bodyHeight,
-      keyboardVisible: false,
-    );
+    // The drag handle keeps its own limit, whatever the room is right now: the
+    // height the user chose is kept when the keyboard goes away again.
+    final dragLimit = consoleMaxHeight(screenHeight: screenHeight);
+    final height = console.isOpen
+        ? consoleHeightFor(
+            wanted: console.height,
+            minOpen: AppConstants.consoleMinOpenHeight,
+            maxHeight: maxHeight,
+            withInputBar: runner.waitingForStdin,
+          )
+        : 0.0;
     // Closing the console only hides it, so offer a way back to its output.
     final canReopen =
         !console.isOpen && (runner.isRunning || runner.events.isNotEmpty);
@@ -63,33 +66,41 @@ class ConsolePanel extends StatelessWidget {
             isRunning: runner.isRunning,
             onTap: console.open,
           ),
-        AnimatedContainer(
-          duration: AppConstants.animBase,
-          curve: Curves.easeOutCubic,
-          height: console.isOpen
-              ? consoleHeightFor(
-                  wanted: console.height,
-                  minOpen: AppConstants.consoleMinOpenHeight,
-                  maxHeight: maxHeight,
-                  withInputBar: runner.waitingForStdin,
-                )
-              : 0,
-          decoration: BoxDecoration(
-            color: scheme.gutterBackground,
-            border: Border(
-                top: BorderSide(
-                    color: scheme.gutterText.withValues(alpha: 0.2),
-                    width: 0.5)),
+        // The clamp is instant: when the room shrinks (the keyboard opening) the
+        // console must not stay too tall for the frames the animation needs.
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: console.isOpen ? height : double.infinity,
           ),
-          clipBehavior: Clip.hardEdge,
-          child: console.isOpen
-              ? _ConsoleContent(
-                  console: console,
-                  runner: runner,
-                  scheme: scheme,
-                  maxHeight: dragLimit,
-                )
-              : null,
+          child: AnimatedContainer(
+            duration: AppConstants.animBase,
+            curve: Curves.easeOutCubic,
+            height: height,
+            decoration: BoxDecoration(
+              color: scheme.gutterBackground,
+              border: Border(
+                  top: BorderSide(
+                      color: scheme.gutterText.withValues(alpha: 0.2),
+                      width: 0.5)),
+            ),
+            clipBehavior: Clip.hardEdge,
+            // The content is laid out at the console's FINAL height. While the box
+            // is still growing (opening, or the input bar appearing) it is
+            // clipped, never squeezed: a squeezed Column overflows.
+            child: console.isOpen
+                ? OverflowBox(
+                    alignment: Alignment.topCenter,
+                    minHeight: height,
+                    maxHeight: height,
+                    child: _ConsoleContent(
+                      console: console,
+                      runner: runner,
+                      scheme: scheme,
+                      maxHeight: dragLimit,
+                    ),
+                  )
+                : null,
+          ),
         ),
       ],
     );

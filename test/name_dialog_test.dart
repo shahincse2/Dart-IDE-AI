@@ -4,8 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// A page with one button that opens the dialog and keeps its result.
 class _Host extends StatefulWidget {
-  const _Host({this.initialValue = ''});
+  const _Host({this.initialValue = '', this.hint});
+
   final String initialValue;
+  final String? hint;
 
   @override
   State<_Host> createState() => _HostState();
@@ -24,6 +26,7 @@ class _HostState extends State<_Host> {
               context,
               title: 'New file',
               initialValue: widget.initialValue,
+              hint: widget.hint,
             );
             setState(() => result = name);
           },
@@ -35,9 +38,15 @@ class _HostState extends State<_Host> {
   }
 }
 
-Future<void> openDialog(WidgetTester tester, {String initialValue = ''}) async {
+Future<void> openDialog(
+  WidgetTester tester, {
+  String initialValue = '',
+  String? hint,
+}) async {
   await tester.pumpWidget(
-    MaterialApp(home: Scaffold(body: _Host(initialValue: initialValue))),
+    MaterialApp(
+      home: Scaffold(body: _Host(initialValue: initialValue, hint: hint)),
+    ),
   );
   await tester.tap(find.text('open'));
   await tester.pumpAndSettle();
@@ -79,6 +88,22 @@ void main() {
       await openDialog(tester, initialValue: 'old.dart');
 
       expect(find.text('old.dart'), findsOneWidget);
+    });
+
+    testWidgets('shows the hint while the field is empty', (tester) async {
+      await openDialog(tester, hint: 'File name');
+
+      expect(find.text('File name'), findsOneWidget);
+    });
+
+    testWidgets('the field has its underline even when no hint is given',
+        (tester) async {
+      await openDialog(tester);
+
+      // No decoration at all would mean no underline (the bug this guards).
+      expect(tester.widget<TextField>(find.byType(TextField)).decoration,
+          isNotNull);
+      expect(find.byType(InputDecorator), findsOneWidget);
     });
   });
 }
