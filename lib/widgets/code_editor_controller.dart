@@ -61,10 +61,12 @@ class CodeEditorController extends TextEditingController {
     required EditorColorScheme scheme,
     int indentSize = 2,
     super.text,
-  })  : _scheme = scheme,
+  })
+      : _scheme = scheme,
         _indentSize = indentSize;
 
   EditorColorScheme get scheme => _scheme;
+
   set scheme(EditorColorScheme value) {
     if (identical(_scheme, value)) return;
     _scheme = value;
@@ -104,9 +106,7 @@ class CodeEditorController extends TextEditingController {
       final stringRanges = <int>[];
       for (final t in tokens) {
         if (t.type == TokenType.string) {
-          stringRanges
-            ..add(t.start)
-            ..add(t.end);
+          stringRanges..add(t.start)..add(t.end);
         }
       }
       _cachedEscapes = findStringEscapes(text, stringRanges);
@@ -163,7 +163,8 @@ class CodeEditorController extends TextEditingController {
   /// Start lines of the regions currently folded (sorted).
   List<int> get foldedStartLines {
     _ensureFoldState();
-    return _foldedStarts.toList()..sort();
+    return _foldedStarts.toList()
+      ..sort();
   }
 
   /// Merged, sorted, inclusive line ranges that are currently hidden.
@@ -228,9 +229,7 @@ class CodeEditorController extends TextEditingController {
     final out = <int>[];
     for (final t in toks) {
       if (t.type == TokenType.string || t.type == TokenType.comment) {
-        out
-          ..add(t.start)
-          ..add(t.end);
+        out..add(t.start)..add(t.end);
       }
     }
     return out;
@@ -449,10 +448,8 @@ class CodeEditorController extends TextEditingController {
   /// forward and adds one more level if that line opened a block
   /// (Section 12). Anything else — typing, pasting, deleting,
   /// programmatic edits from the toolbar — passes through untouched.
-  TextEditingValue _applyAutoIndent(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
+  TextEditingValue _applyAutoIndent(TextEditingValue oldValue,
+      TextEditingValue newValue,) {
     final oldText = oldValue.text;
     final newText = newValue.text;
     final newSel = newValue.selection;
@@ -521,10 +518,8 @@ class CodeEditorController extends TextEditingController {
   ///   3. Any other opener insert adds its matching closer right
   ///      after, with the cursor left in between.
   /// Anything else passes through untouched.
-  TextEditingValue _applyAutoPair(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
+  TextEditingValue _applyAutoPair(TextEditingValue oldValue,
+      TextEditingValue newValue,) {
     final oldText = oldValue.text;
     final newText = newValue.text;
     final oldSel = oldValue.selection;
@@ -578,7 +573,8 @@ class CodeEditorController extends TextEditingController {
     final closeChar = _autoPairOpenToClose[typedChar];
     if (closeChar != null) {
       final updated =
-          '${newText.substring(0, cursorBefore + 1)}$closeChar${newText.substring(cursorBefore + 1)}';
+          '${newText.substring(0, cursorBefore + 1)}$closeChar${newText
+          .substring(cursorBefore + 1)}';
       return TextEditingValue(
         text: updated,
         selection: TextSelection.collapsed(offset: cursorBefore + 1),
@@ -676,7 +672,8 @@ class CodeEditorController extends TextEditingController {
     // folded (hidden) ranges. Collect every boundary into one sorted
     // breakpoint list, then build one span per gap between consecutive
     // breakpoints with whatever combination of styling applies.
-    final breakpoints = SplayTreeSet<int>()..addAll([0, source.length]);
+    final breakpoints = SplayTreeSet<int>()
+      ..addAll([0, source.length]);
     for (final t in toks) {
       breakpoints.add(t.start);
       breakpoints.add(t.end);
@@ -697,7 +694,7 @@ class CodeEditorController extends TextEditingController {
     }
     breakpoints.addAll(esc.boundaries);
     final sorted =
-        breakpoints.where((b) => b >= 0 && b <= source.length).toList();
+    breakpoints.where((b) => b >= 0 && b <= source.length).toList();
 
     final children = <TextSpan>[];
     for (var i = 0; i < sorted.length - 1; i++) {
@@ -706,7 +703,7 @@ class CodeEditorController extends TextEditingController {
       if (start >= end) continue;
 
       final hiddenRange =
-          hidden.isEmpty ? null : _hiddenRangeCovering(hidden, start, end);
+      hidden.isEmpty ? null : _hiddenRangeCovering(hidden, start, end);
       if (hiddenRange != null) {
         children.add(
           TextSpan(
