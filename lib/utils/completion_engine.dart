@@ -1,8 +1,12 @@
 import '../utils/dart_syntax_highlighter.dart';
+import 'snippet_template.dart';
 
 /// A completion suggestion with a label and the text to insert.
 class CompletionItem {
   final String label;
+
+  /// What is inserted. May contain [kStopMarker] (`§`) where the cursor
+  /// should stop: first right after inserting, then on each Tab.
   final String insertText;
   final CompletionKind kind;
 
@@ -11,6 +15,9 @@ class CompletionItem {
     required this.insertText,
     required this.kind,
   });
+
+  /// The inserted text without the stop markers.
+  String get plainText => insertText.replaceAll(kStopMarker, '');
 }
 
 enum CompletionKind { keyword, snippet, identifier }
@@ -27,48 +34,48 @@ class CompletionEngine {
   static const List<CompletionItem> _snippets = [
     CompletionItem(
       label: 'main',
-      insertText: 'void main() {\n  \n}',
+      insertText: 'void main() {\n  §\n}',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
       label: 'print',
-      insertText: "print('');",
+      insertText: "print('§');",
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
       label: 'for',
-      insertText: 'for (var i = 0; i < ; i++) {\n  \n}',
+      insertText: 'for (var i = 0; i < §; i++) {\n  §\n}',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
       label: 'for-in',
-      insertText: 'for (var item in ) {\n  \n}',
+      insertText: 'for (var item in §) {\n  §\n}',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
       label: 'while',
-      insertText: 'while () {\n  \n}',
+      insertText: 'while (§) {\n  §\n}',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
       label: 'if',
-      insertText: 'if () {\n  \n}',
+      insertText: 'if (§) {\n  §\n}',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
       label: 'if-else',
-      insertText: 'if () {\n  \n} else {\n  \n}',
+      insertText: 'if (§) {\n  §\n} else {\n  §\n}',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
       label: 'switch',
       insertText:
-          'switch () {\n  case :\n    break;\n  default:\n    break;\n}',
+          'switch (§) {\n  case §:\n    break;\n  default:\n    break;\n}',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
       label: 'class',
-      insertText: 'class  {\n  \n}',
+      insertText: 'class § {\n  §\n}',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
@@ -98,7 +105,7 @@ class CompletionEngine {
     ),
     CompletionItem(
       label: 'import',
-      insertText: "import '';",
+      insertText: "import '§';",
       kind: CompletionKind.keyword,
     ),
     CompletionItem(
@@ -118,17 +125,17 @@ class CompletionEngine {
     ),
     CompletionItem(
       label: 'Future',
-      insertText: 'Future<>',
+      insertText: 'Future<§>',
       kind: CompletionKind.keyword,
     ),
     CompletionItem(
       label: 'List',
-      insertText: 'List<>',
+      insertText: 'List<§>',
       kind: CompletionKind.keyword,
     ),
     CompletionItem(
       label: 'Map',
-      insertText: 'Map<, >',
+      insertText: 'Map<§, §>',
       kind: CompletionKind.keyword,
     ),
     CompletionItem(
@@ -153,7 +160,7 @@ class CompletionEngine {
     ),
     CompletionItem(
       label: 'try-catch',
-      insertText: 'try {\n  \n} catch (e) {\n  print(e);\n}',
+      insertText: 'try {\n  §\n} catch (e) {\n  print(e);\n}',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
@@ -183,32 +190,32 @@ class CompletionEngine {
     ),
     CompletionItem(
       label: 'stdout.write',
-      insertText: 'write()',
+      insertText: 'write(§)',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
       label: 'stdout.writeln',
-      insertText: 'writeln()',
+      insertText: 'writeln(§)',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
       label: 'stdout.writeLine',
-      insertText: 'writeln()',
+      insertText: 'writeln(§)',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
       label: 'stdout.writeLineSync',
-      insertText: 'writeln()',
+      insertText: 'writeln(§)',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
       label: 'stdout.writeSync',
-      insertText: 'write()',
+      insertText: 'write(§)',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
       label: 'stdout.write',
-      insertText: 'write()',
+      insertText: 'write(§)',
       kind: CompletionKind.snippet,
     ),
   ];
