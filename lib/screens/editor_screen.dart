@@ -20,6 +20,7 @@ import '../widgets/export_action.dart';
 import '../widgets/file_tree.dart';
 import '../widgets/file_tree/import_action.dart';
 import '../widgets/font_size_dialog.dart';
+import '../widgets/format_action.dart';
 import '../widgets/go_to_line_dialog.dart';
 import '../widgets/variable_inspector_panel.dart';
 import 'settings_screen.dart';
@@ -278,6 +279,14 @@ class _EditorScreenState extends State<EditorScreen> {
     showGoToLineDialog(context, activeController);
   }
 
+  /// Format the whole file (the Format code menu item, and Ctrl+Alt+L).
+  Future<void> _handleFormat() async {
+    final path = _fileProvider.activeTab;
+    final controller = path != null ? _controllers[path] : null;
+    if (controller == null) return;
+    await formatWithMessage(context, controller);
+  }
+
   void _handleFoldAll() {
     final path = _fileProvider.activeTab;
     if (path == null) return;
@@ -377,6 +386,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 })
             : null,
         onGoToLinePressed: activeController != null ? _handleGoToLine : null,
+        onFormatPressed: activeController != null ? _handleFormat : null,
         onFoldAllPressed: activeController != null ? _handleFoldAll : null,
         onUnfoldAllPressed: activeController != null ? _handleUnfoldAll : null,
         argsCount:
@@ -429,6 +439,8 @@ class _EditorScreenState extends State<EditorScreen> {
             _handleOpenFind(expandReplace: true),
         const SingleActivator(LogicalKeyboardKey.keyG, control: true):
             _handleGoToLine,
+        const SingleActivator(LogicalKeyboardKey.keyL, control: true, alt: true):
+            _handleFormat,
       },
       child: Focus(
         autofocus: true,
@@ -465,6 +477,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onSavePressed;
   final VoidCallback? onFindPressed;
   final VoidCallback? onGoToLinePressed;
+  final VoidCallback? onFormatPressed;
   final VoidCallback? onFoldAllPressed;
   final VoidCallback? onUnfoldAllPressed;
   final int argsCount;
@@ -491,6 +504,7 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onSavePressed,
     required this.onFindPressed,
     required this.onGoToLinePressed,
+    required this.onFormatPressed,
     required this.onFoldAllPressed,
     required this.onUnfoldAllPressed,
     required this.argsCount,
@@ -553,6 +567,17 @@ class _EditorAppBar extends StatelessWidget implements PreferredSizeWidget {
           onOpened: () => FocusManager.instance.primaryFocus?.unfocus(),
           onSelected: (action) => action(),
           itemBuilder: (context) => [
+            PopupMenuItem(
+              enabled: onFormatPressed != null,
+              value: onFormatPressed,
+              child: ListTile(
+                leading: const Icon(Icons.format_align_left_rounded),
+                title: const Text('Format code'),
+                // Only a wide screen (with a keyboard) has the shortcut.
+                trailing: useSidebar ? const Text('Ctrl+Alt+L') : null,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
             PopupMenuItem(
               enabled: onGoToLinePressed != null,
               value: onGoToLinePressed,

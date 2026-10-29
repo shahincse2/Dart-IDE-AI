@@ -7,8 +7,9 @@ import 'completion_model.dart';
 
 /// Inline code completion bar shown between the editor and the coding
 /// toolbar. Hidden when there are no suggestions or the cursor is not in a
-/// word. The first suggestion has an outline: it is the one Tab inserts.
-class CompletionOverlay extends StatelessWidget {
+/// word. The chosen suggestion has an outline: it is the one Tab inserts
+/// (Down and Up choose another).
+class CompletionOverlay extends StatefulWidget {
   final CompletionModel model;
 
   const CompletionOverlay({super.key, required this.model});
@@ -17,30 +18,70 @@ class CompletionOverlay extends StatelessWidget {
   static const double barHeight = 44;
 
   @override
+  State<CompletionOverlay> createState() => _CompletionOverlayState();
+}
+
+class _CompletionOverlayState extends State<CompletionOverlay> {
+  final List<GlobalKey> _chipKeys = [];
+  List<CompletionItem>? _shownList;
+  int _shownSelection = 0;
+
+  GlobalKey _keyFor(int index) {
+    while (_chipKeys.length <= index) {
+      _chipKeys.add(GlobalKey());
+    }
+    return _chipKeys[index];
+  }
+
+  /// Scrolls the bar so the chosen chip is in view: after choosing another
+  /// one, and back to the first when the suggestions change.
+  void _keepChosenInView() {
+    final model = widget.model;
+    final changed = !identical(_shownList, model.suggestions);
+    if (!changed && _shownSelection == model.selectedIndex) return;
+    _shownList = model.suggestions;
+    _shownSelection = model.selectedIndex;
+    final index = model.selectedIndex;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final chip = _keyFor(index).currentContext;
+      if (chip == null || !chip.mounted) return;
+      Scrollable.ensureVisible(
+        chip,
+        alignment: 0.5,
+        duration: AppConstants.animFast,
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final model = widget.model;
     return ListenableBuilder(
       // The controller too: a theme change must repaint the bar.
       listenable: Listenable.merge([model, model.controller]),
       builder: (context, _) {
         final suggestions = model.suggestions;
         if (suggestions.isEmpty) return const SizedBox.shrink();
+        _keepChosenInView();
 
         final scheme = model.controller.scheme;
         return Container(
-          height: barHeight,
+          height: CompletionOverlay.barHeight,
           color: scheme.gutterBackground,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.spaceSm),
+            padding:
+                const EdgeInsets.symmetric(horizontal: AppConstants.spaceSm),
             itemCount: suggestions.length,
             separatorBuilder: (_, __) => VerticalDivider(
               width: 1,
               color: scheme.gutterText.withValues(alpha: 0.2),
             ),
             itemBuilder: (context, i) => _SuggestionChip(
+              key: _keyFor(i),
               item: suggestions[i],
               scheme: scheme,
-              isFirst: i == 0,
+              isChosen: i == model.selectedIndex,
               onTap: () => model.accept(suggestions[i]),
             ),
           ),
@@ -53,13 +94,14 @@ class CompletionOverlay extends StatelessWidget {
 class _SuggestionChip extends StatelessWidget {
   final CompletionItem item;
   final EditorColorScheme scheme;
-  final bool isFirst;
+  final bool isChosen;
   final VoidCallback onTap;
 
   const _SuggestionChip({
+    super.key,
     required this.item,
     required this.scheme,
-    required this.isFirst,
+    required this.isChosen,
     required this.onTap,
   });
 
@@ -73,6 +115,7 @@ class _SuggestionChip extends StatelessWidget {
 
     return Semantics(
       button: true,
+      selected: isChosen,
       label: 'Insert ${item.label}',
       excludeSemantics: true,
       child: InkWell(
@@ -81,7 +124,7 @@ class _SuggestionChip extends StatelessWidget {
           margin: const EdgeInsets.symmetric(vertical: 6),
           padding: const EdgeInsets.symmetric(horizontal: AppConstants.spaceSm),
           // The outline (a shape, not only a colour) marks what Tab inserts.
-          decoration: isFirst
+          decoration: isChosen
               ? BoxDecoration(
                   border: Border.all(color: color.withValues(alpha: 0.7)),
                   borderRadius: BorderRadius.circular(6),

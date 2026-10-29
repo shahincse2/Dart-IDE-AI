@@ -163,19 +163,16 @@ class CompletionEngine {
       insertText: 'try {\n  §\n} catch (e) {\n  print(e);\n}',
       kind: CompletionKind.snippet,
     ),
+    // Console input and output. The longer names come first: they are what
+    // Tab inserts for a word like "std".
     CompletionItem(
-      label: 'stdout',
-      insertText: 'stdout',
+      label: 'stdout.write',
+      insertText: 'stdout.write(§);',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
-      label: 'stdin',
-      insertText: 'stdin',
-      kind: CompletionKind.snippet,
-    ),
-    CompletionItem(
-      label: 'stdin',
-      insertText: 'stdin.readLineSync();',
+      label: 'stdout.writeln',
+      insertText: 'stdout.writeln(§);',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
@@ -189,33 +186,13 @@ class CompletionEngine {
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
-      label: 'stdout.write',
-      insertText: 'write(§)',
+      label: 'stdout',
+      insertText: 'stdout',
       kind: CompletionKind.snippet,
     ),
     CompletionItem(
-      label: 'stdout.writeln',
-      insertText: 'writeln(§)',
-      kind: CompletionKind.snippet,
-    ),
-    CompletionItem(
-      label: 'stdout.writeLine',
-      insertText: 'writeln(§)',
-      kind: CompletionKind.snippet,
-    ),
-    CompletionItem(
-      label: 'stdout.writeLineSync',
-      insertText: 'writeln(§)',
-      kind: CompletionKind.snippet,
-    ),
-    CompletionItem(
-      label: 'stdout.writeSync',
-      insertText: 'write(§)',
-      kind: CompletionKind.snippet,
-    ),
-    CompletionItem(
-      label: 'stdout.write',
-      insertText: 'write(§)',
+      label: 'stdin',
+      insertText: 'stdin',
       kind: CompletionKind.snippet,
     ),
   ];

@@ -75,4 +75,40 @@ void main() {
       expect(snippetNamed('print').plainText, "print('');");
     });
   });
+
+  group('the list of suggestions', () {
+    test('no word appears twice', () {
+      final labels = <String>[];
+      for (final letter in 'abcdefghijklmnopqrstuvwxyz'.split('')) {
+        labels.addAll(
+          CompletionEngine.suggest(letter, '', maxResults: 100).map((e) => e.label),
+        );
+      }
+
+      expect(labels.length, labels.toSet().length);
+    });
+
+    test('stdout.write inserts the whole call, cursor inside the brackets', () {
+      final item = snippetNamed('stdout.write');
+      final snippet = expandSnippet(item.insertText);
+
+      expect(snippet.text, 'stdout.write();');
+      expect(snippet.stops.first, 13);
+    });
+
+    test('for "std" the useful calls come before the bare names', () {
+      final labels = CompletionEngine.suggest('std', '').map((e) => e.label).toList();
+
+      expect(labels.first, 'stdout.write');
+      expect(labels.indexOf('stdout.writeln'), lessThan(labels.indexOf('stdout')));
+    });
+
+    test('words that do not exist in Dart are gone', () {
+      final labels = CompletionEngine.suggest('stdout', '').map((e) => e.label);
+
+      expect(labels, isNot(contains('stdout.writeLine')));
+      expect(labels, isNot(contains('stdout.writeLineSync')));
+      expect(labels, isNot(contains('stdout.writeSync')));
+    });
+  });
 }

@@ -14,23 +14,46 @@ CodeEditorController editorWith(String text, {int? cursor}) {
   return controller;
 }
 
-KeyEvent tab(KeyEvent Function({
-  required PhysicalKeyboardKey physicalKey,
-  required LogicalKeyboardKey logicalKey,
-  required Duration timeStamp,
-}) make) =>
+KeyEvent tab(
+        KeyEvent Function({
+          required PhysicalKeyboardKey physicalKey,
+          required LogicalKeyboardKey logicalKey,
+          required Duration timeStamp,
+        }) make) =>
     make(
       physicalKey: PhysicalKeyboardKey.tab,
       logicalKey: LogicalKeyboardKey.tab,
       timeStamp: Duration.zero,
     );
 
-KeyEvent tabDown() => tab(({required physicalKey, required logicalKey, required timeStamp}) =>
-    KeyDownEvent(physicalKey: physicalKey, logicalKey: logicalKey, timeStamp: timeStamp));
-KeyEvent tabUp() => tab(({required physicalKey, required logicalKey, required timeStamp}) =>
-    KeyUpEvent(physicalKey: physicalKey, logicalKey: logicalKey, timeStamp: timeStamp));
-KeyEvent tabRepeat() => tab(({required physicalKey, required logicalKey, required timeStamp}) =>
-    KeyRepeatEvent(physicalKey: physicalKey, logicalKey: logicalKey, timeStamp: timeStamp));
+KeyEvent tabDown() =>
+    tab(({required physicalKey, required logicalKey, required timeStamp}) =>
+        KeyDownEvent(
+            physicalKey: physicalKey,
+            logicalKey: logicalKey,
+            timeStamp: timeStamp));
+KeyEvent tabUp() =>
+    tab(({required physicalKey, required logicalKey, required timeStamp}) =>
+        KeyUpEvent(
+            physicalKey: physicalKey,
+            logicalKey: logicalKey,
+            timeStamp: timeStamp));
+KeyEvent tabRepeat() =>
+    tab(({required physicalKey, required logicalKey, required timeStamp}) =>
+        KeyRepeatEvent(
+            physicalKey: physicalKey,
+            logicalKey: logicalKey,
+            timeStamp: timeStamp));
+
+KeyEvent keyDown(LogicalKeyboardKey logical, PhysicalKeyboardKey physical) =>
+    KeyDownEvent(
+        physicalKey: physical, logicalKey: logical, timeStamp: Duration.zero);
+KeyEvent down() =>
+    keyDown(LogicalKeyboardKey.arrowDown, PhysicalKeyboardKey.arrowDown);
+KeyEvent up() =>
+    keyDown(LogicalKeyboardKey.arrowUp, PhysicalKeyboardKey.arrowUp);
+KeyEvent escape() =>
+    keyDown(LogicalKeyboardKey.escape, PhysicalKeyboardKey.escape);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -66,7 +89,8 @@ void main() {
 
     test('are empty while a range of text is selected', () {
       final controller = editorWith('pri');
-      controller.selection = const TextSelection(baseOffset: 0, extentOffset: 3);
+      controller.selection =
+          const TextSelection(baseOffset: 0, extentOffset: 3);
 
       expect(CompletionModel(controller).hasSuggestions, isFalse);
     });
@@ -83,7 +107,8 @@ void main() {
       expect(controller.selection.baseOffset, 7);
     });
 
-    test('a block snippet is lined up with its line, cursor in the condition', () {
+    test('a block snippet is lined up with its line, cursor in the condition',
+        () {
       final controller = editorWith('  i');
       final model = CompletionModel(controller);
 
@@ -203,6 +228,98 @@ void main() {
       ));
 
       expect(result, KeyEventResult.ignored);
+    });
+  });
+
+  group('choosing among the suggestions', () {
+    test('starts at the first', () {
+      final model = CompletionModel(editorWith('i'));
+
+      expect(model.selectedIndex, 0);
+      expect(model.suggestions.length, greaterThan(2));
+    });
+
+    test('Down chooses the next one, and Tab inserts that one', () {
+      final controller = editorWith('i');
+      final model = CompletionModel(controller);
+      final second = model.suggestions[1];
+
+      expect(model.handleKey(down()), KeyEventResult.handled);
+      expect(model.selectedIndex, 1);
+      model.handleKey(tabDown());
+
+      expect(controller.text, second.insertText.replaceAll('§', ''));
+    });
+
+    test('Down after the last goes back to the first', () {
+      final model = CompletionModel(editorWith('i'));
+
+      for (var i = 0; i < model.suggestions.length; i++) {
+        model.handleKey(down());
+      }
+
+      expect(model.selectedIndex, 0);
+    });
+
+    test('Up from the first goes to the last', () {
+      final model = CompletionModel(editorWith('i'));
+
+      model.handleKey(up());
+
+      expect(model.selectedIndex, model.suggestions.length - 1);
+    });
+
+    test('a new set of suggestions starts at the first again', () {
+      final controller = editorWith('i');
+      final model = CompletionModel(controller);
+      model.handleKey(down());
+
+      controller.value = const TextEditingValue(
+        text: 'im',
+        selection: TextSelection.collapsed(offset: 2),
+      );
+
+      expect(model.selectedIndex, 0);
+    });
+
+    test('the arrow keys are left alone when nothing is suggested', () {
+      final model = CompletionModel(editorWith('print(x); '));
+
+      expect(model.handleKey(down()), KeyEventResult.ignored);
+      expect(model.handleKey(up()), KeyEventResult.ignored);
+    });
+  });
+
+  group('Esc', () {
+    test('hides the suggestions until the next edit', () {
+      final controller = editorWith('pri');
+      final model = CompletionModel(controller);
+
+      expect(model.handleKey(escape()), KeyEventResult.handled);
+      expect(model.hasSuggestions, isFalse);
+
+      controller.value = const TextEditingValue(
+        text: 'prin',
+        selection: TextSelection.collapsed(offset: 4),
+      );
+      expect(model.hasSuggestions, isTrue);
+    });
+
+    test('moving the cursor does not bring them back', () {
+      final controller = editorWith('pri');
+      final model = CompletionModel(controller);
+      model.handleKey(escape());
+
+      controller.selection = const TextSelection.collapsed(offset: 2);
+      controller.selection = const TextSelection.collapsed(offset: 3);
+
+      expect(model.hasSuggestions, isFalse);
+    });
+
+    test('is left alone when nothing is suggested', () {
+      final model = CompletionModel(editorWith('print(x); '));
+
+      expect(model.handleKey(escape()), KeyEventResult.ignored);
     });
   });
 }
