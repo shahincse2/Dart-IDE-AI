@@ -1,4 +1,4 @@
-package com.example.dart_ide
+package com.algorisesoft.dartide
 
 import android.content.ContentValues
 import android.content.Context

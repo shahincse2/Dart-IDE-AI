@@ -1,0 +1,13 @@
+# Generates the launcher icons (Android + iOS) from the images in assets/icon/.
+# Run: fvm dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: true
+  # Full square, no transparency: the old (pre-Android 8) icon and the iOS icon.
+  image_path: "assets/icon/app_icon.png"
+  remove_alpha_ios: true
+  # Android 8+ adaptive icon: a background colour and a transparent foreground.
+  adaptive_icon_background: "#0F172A"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+  # Android 13+ themed icon: only the shape of this image is used.
+  adaptive_icon_monochrome: "assets/icon/app_icon_monochrome.png"

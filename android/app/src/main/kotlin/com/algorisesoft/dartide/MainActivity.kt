@@ -1,4 +1,4 @@
-package com.example.dart_ide
+package com.algorisesoft.dartide
 
 import android.content.Intent
 import io.flutter.embedding.android.FlutterActivity

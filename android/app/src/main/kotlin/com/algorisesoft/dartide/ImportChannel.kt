@@ -1,4 +1,4 @@
-package com.example.dart_ide
+package com.algorisesoft.dartide
 
 import android.app.Activity
 import android.content.Intent

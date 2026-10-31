@@ -1,0 +1,10 @@
+# Generates the launch screen (shown by the system before Flutter starts).
+# Run: fvm dart run flutter_native_splash:create
+flutter_native_splash:
+  color: "#0F172A"
+  image: assets/splash/splash_logo.png
+  android_12:
+    color: "#0F172A"
+    image: assets/splash/splash_logo.png
+  fullscreen: false
+  web: false
