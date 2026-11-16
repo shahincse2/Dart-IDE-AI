@@ -51,6 +51,10 @@ class _CodeEditorState extends State<CodeEditor> {
     super.initState();
     widget.controller.addListener(_onControllerChanged);
     _scrollController.addListener(_onScrollChanged);
+    // A file opened with its cursor deep inside (remembered from last time):
+    // jump to that part, so the user sees where they were.
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _ensureCursorVisible(animate: false));
   }
 
   @override
@@ -65,6 +69,8 @@ class _CodeEditorState extends State<CodeEditor> {
       if (_scrollController.hasClients) {
         _scrollController.jumpTo(0);
       }
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _ensureCursorVisible(animate: false));
     }
   }
 
@@ -81,7 +87,7 @@ class _CodeEditorState extends State<CodeEditor> {
     setState(() {});
   }
 
-  void _ensureCursorVisible() {
+  void _ensureCursorVisible({bool animate = true}) {
     if (!mounted) return;
     scrollCursorIntoView(
       controller: widget.controller,
@@ -89,6 +95,7 @@ class _CodeEditorState extends State<CodeEditor> {
       layout: _layout,
       wordWrap: widget.wordWrap,
       lineHeight: editorLineHeight(widget.fontSize),
+      animate: animate,
     );
   }
 

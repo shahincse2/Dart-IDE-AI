@@ -6,6 +6,7 @@ import '../../providers/settings_provider.dart';
 import '../../widgets/font_size_dialog.dart';
 import '../../widgets/format_action.dart';
 import '../../widgets/go_to_line_dialog.dart';
+import '../../widgets/keyboard_avoiding_sheet.dart';
 import '../../widgets/variable_inspector_panel.dart';
 import '../git_screen.dart';
 import '../settings_screen.dart';
@@ -49,10 +50,12 @@ class EditorCommands {
     _runner.run(controller.text, args: _editors.args[path] ?? const []);
   }
 
-  void goToLine() => _editors.withActive((_, c) => showGoToLineDialog(_context(), c));
+  void goToLine() =>
+      _editors.withActive((_, c) => showGoToLineDialog(_context(), c));
 
   /// Format the whole file (the Format code menu item, and Ctrl+Alt+L).
-  void format() => _editors.withActive((_, c) => formatWithMessage(_context(), c));
+  void format() =>
+      _editors.withActive((_, c) => formatWithMessage(_context(), c));
 
   void foldAll() => _editors.withActive((_, c) => c.foldAll());
 
@@ -69,7 +72,9 @@ class EditorCommands {
       context: _context(),
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const VariableInspectorPanel(),
+      builder: (_) => const KeyboardAvoidingSheet(
+        child: VariableInspectorPanel(),
+      ),
     );
   }
 

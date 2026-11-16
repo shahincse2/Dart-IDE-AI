@@ -5,12 +5,15 @@ import '../code_editor_controller.dart';
 import 'line_layout.dart';
 
 /// Scrolls [scroll] just enough that the line the cursor is on is visible.
+/// With [animate] false it jumps there at once (a file that has just been
+/// opened at its remembered place).
 void scrollCursorIntoView({
   required CodeEditorController controller,
   required ScrollController scroll,
   required LineLayout layout,
   required bool wordWrap,
   required double lineHeight,
+  bool animate = true,
 }) {
   if (!scroll.hasClients) return;
   final selection = controller.selection;
@@ -51,14 +54,21 @@ void scrollCursorIntoView({
   final viewportHeight = scroll.position.viewportDimension;
   final viewBottom = viewTop + viewportHeight;
 
+  double? target;
   if (lineTop < viewTop) {
-    scroll.animateTo(lineTop,
-        duration: AppConstants.animFast, curve: Curves.easeOut);
+    target = lineTop;
   } else if (lineBottom > viewBottom) {
+    target = lineBottom - viewportHeight;
+  }
+  if (target == null) return;
+
+  if (animate) {
     scroll.animateTo(
-      lineBottom - viewportHeight,
+      target,
       duration: AppConstants.animFast,
       curve: Curves.easeOut,
     );
+  } else {
+    scroll.jumpTo(target);
   }
 }

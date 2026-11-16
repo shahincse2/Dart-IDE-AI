@@ -1,3 +1,6 @@
+import 'package:dartlab/screens/editor_screen.dart';
+import 'package:dartlab/services/session/cursor_memory.dart';
+import 'package:dartlab/widgets/session_keeper.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -65,6 +68,10 @@ class DartLabApp extends StatelessWidget {
           },
           dispose: (_, tracker) => tracker.dispose(),
         ),
+        Provider<CursorMemory>(
+          create: (_) => CursorMemory(),
+          dispose: (_, memory) => memory.dispose(),
+        ),
         // ConsoleProvider only manages visibility/sizing — it reads
         // RunnerProvider's events rather than duplicating them, so it
         // needs a reference to it. ChangeNotifierProxyProvider is the
@@ -72,7 +79,8 @@ class DartLabApp extends StatelessWidget {
         // that one".
         ChangeNotifierProxyProvider<RunnerProvider, ConsoleProvider>(
           create: (_) => ConsoleProvider(),
-          update: (_, runner, console) => (console ?? ConsoleProvider())..bind(runner),
+          update: (_, runner, console) =>
+              (console ?? ConsoleProvider())..bind(runner),
         ),
       ],
       child: Consumer<SettingsProvider>(
@@ -83,7 +91,10 @@ class DartLabApp extends StatelessWidget {
             theme: AppTheme.light(),
             darkTheme: AppTheme.dark(),
             themeMode: settings.themeMode,
-            home: const HomeScreen(),
+            home: SessionKeeper(
+              editorBuilder: (_) => const EditorScreen(),
+              child: const HomeScreen(),
+            ),
           );
         },
       ),

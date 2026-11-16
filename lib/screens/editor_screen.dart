@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/file_provider.dart';
 import '../providers/runner_provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/session/cursor_memory.dart';
 import '../utils/constants.dart';
 import '../widgets/editor_body.dart';
 import '../widgets/file_tree.dart';
@@ -47,6 +48,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _runner = context.read<RunnerProvider>();
     _editors = EditorControllers(
       files: _files,
+      cursors: context.read<CursorMemory>(),
       settings: () => context.read<SettingsProvider>(),
       isAlive: () => mounted,
       onChanged: () => setState(() {}),

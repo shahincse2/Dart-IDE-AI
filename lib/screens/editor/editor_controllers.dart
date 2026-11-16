@@ -2,24 +2,29 @@ import 'package:flutter/material.dart';
 
 import '../../providers/file_provider.dart';
 import '../../providers/settings_provider.dart';
+import '../../services/session/cursor_memory.dart';
 import '../../utils/themes.dart';
 import '../../widgets/code_editor_controller.dart';
 
 /// One editor controller (and undo history) for every open tab, kept matched
 /// to [FileProvider.openTabs]: controllers of closed tabs are disposed, and a
-/// newly opened tab gets one, loaded with the file's text.
+/// newly opened tab gets one, loaded with the file's text and with the cursor
+/// where the user left it last time ([CursorMemory]).
 class EditorControllers {
   EditorControllers({
     required FileProvider files,
+    required CursorMemory cursors,
     required SettingsProvider Function() settings,
     required bool Function() isAlive,
     required VoidCallback onChanged,
   })  : _files = files,
+        _cursors = cursors,
         _settings = settings,
         _isAlive = isAlive,
         _onChanged = onChanged;
 
   final FileProvider _files;
+  final CursorMemory _cursors;
   final SettingsProvider Function() _settings;
   final bool Function() _isAlive;
   final VoidCallback _onChanged;
@@ -68,6 +73,7 @@ class EditorControllers {
       }
       _loading.add(path);
 
+      await _cursors.useProject(_files.currentProject?.id);
       final settings = _settings();
       final controller = CodeEditorController(
         scheme: editorSchemeFromName(settings.editorThemeName),
@@ -86,10 +92,15 @@ class EditorControllers {
 
       controller.value = TextEditingValue(
         text: content,
-        selection: const TextSelection.collapsed(offset: 0),
+        selection: TextSelection.collapsed(
+          offset: (_cursors.cursorOf(path) ?? 0).clamp(0, content.length),
+        ),
       );
       controller.addListener(
         () => _files.scheduleAutoSave(path, controller.text),
+      );
+      controller.addListener(
+        () => _cursors.record(path, controller.selection.baseOffset),
       );
 
       controllers[path] = controller;
