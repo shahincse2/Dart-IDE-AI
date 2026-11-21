@@ -17,9 +17,9 @@ void main() {
       final lines = result.source.split('\n');
 
       expect(result.error, isNull);
-      expect(lines[0], contains('dart:io is provided by DartLab'));
+      expect(lines[0], contains('dart:io is provided by Dart IDE'));
       expect(lines[2], 'void main() {'); // same line number as in the editor
-      expect(result.source, contains('class _DartLabOutput'));
+      expect(result.source, contains('class _DartIdeOutput'));
     });
 
     test('stdin.readLineSync() is left exactly as the user wrote it', () {
@@ -87,7 +87,7 @@ void main() {
 
       expect(result.error, isNull);
       expect(result.source, startsWith("import 'package:dart_ide/console_io.dart'; void main()"));
-      expect(result.source, isNot(contains('class _DartLabOutput')));
+      expect(result.source, isNot(contains('class _DartIdeOutput')));
     });
   });
 }

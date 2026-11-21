@@ -47,9 +47,9 @@ Future<void> letMessageGo(WidgetTester tester) async {
 void main() {
   group('exportWithMessage', () {
     testWidgets('says where the file was saved', (tester) async {
-      await exportWith(tester, const ExportOutcome.saved('Download/DartLab/main.dart'));
+      await exportWith(tester, const ExportOutcome.saved('Download/Dart IDE/main.dart'));
 
-      expect(find.text('Saved to Download/DartLab/main.dart'), findsOneWidget);
+      expect(find.text('Saved to Download/Dart IDE/main.dart'), findsOneWidget);
       await letMessageGo(tester);
     });
 

@@ -8,7 +8,7 @@ import 'package:flutter/services.dart';
 /// The Google Files picker used by the file_picker plugin shows "No items"
 /// and no way to browse on some phones; this list does not have that problem.
 class SystemFileChooser {
-  static const MethodChannel _channel = MethodChannel('dartlab/import');
+  static const MethodChannel _channel = MethodChannel('dart_ide/import');
 
   /// Only Android has this; elsewhere use the file_picker plugin.
   bool get isAvailable => Platform.isAndroid;

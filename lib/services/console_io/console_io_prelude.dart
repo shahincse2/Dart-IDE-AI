@@ -6,23 +6,23 @@ const String kConsoleIoLibrary = 'package:dart_ide/console_io.dart';
 /// It is appended to the user's program (declarations may appear in any
 /// order, so the user's line numbers stay untouched) and is built only on
 /// the functions registered by `bindConsoleIo`. Nothing here reaches the
-/// real `dart:io`: output goes to the DartLab console, input comes from
+/// real `dart:io`: output goes to the Dart IDE console, input comes from
 /// the console's input bar, and `exit` ends only the program, never the app.
 ///
 /// `stdin.readLineSync()` really blocks (the program's own isolate waits for
 /// the line), so it works anywhere: in `main`, in helper functions, in
 /// getters, in callbacks.
 const String kConsoleIoPrelude = r'''
-// ---- DartLab console I/O (added automatically) ----
-class _DartLabOutput {
-  _DartLabOutput(this._isError);
+// ---- Dart IDE console I/O (added automatically) ----
+class _DartIdeOutput {
+  _DartIdeOutput(this._isError);
   final bool _isError;
 
   void _emit(String text) {
     if (_isError) {
-      dartlabWriteErr(text);
+      dartIdeWriteErr(text);
     } else {
-      dartlabWrite(text);
+      dartIdeWrite(text);
     }
   }
 
@@ -34,16 +34,16 @@ class _DartLabOutput {
   Future<void> flush() async {}
 }
 
-class _DartLabInput {
+class _DartIdeInput {
   String? readLineSync({Object? encoding, bool retainNewlines = false}) {
-    final line = dartlabReadLine();
+    final line = dartIdeReadLine();
     return retainNewlines ? '$line\n' : line;
   }
 }
 
-final stdout = _DartLabOutput(false);
-final stderr = _DartLabOutput(true);
-final stdin = _DartLabInput();
+final stdout = _DartIdeOutput(false);
+final stderr = _DartIdeOutput(true);
+final stdin = _DartIdeInput();
 
-void exit(int code) => dartlabExit(code);
+void exit(int code) => dartIdeExit(code);
 ''';

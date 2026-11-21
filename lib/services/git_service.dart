@@ -58,9 +58,9 @@ class GitRepo {
 /// Handles GitHub/GitLab authentication and API calls.
 /// Tokens are stored in secure storage — never in plain prefs.
 class GitService {
-  static const _githubTokenKey = 'dartlab.github_token';
-  static const _gitlabTokenKey = 'dartlab.gitlab_token';
-  static const _gitlabUrlKey = 'dartlab.gitlab_url';
+  static const _githubTokenKey = 'dart_ide.github_token';
+  static const _gitlabTokenKey = 'dart_ide.gitlab_token';
+  static const _gitlabUrlKey = 'dart_ide.gitlab_url';
 
   final FlutterSecureStorage _storage;
 

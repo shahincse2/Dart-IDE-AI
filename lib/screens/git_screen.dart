@@ -262,7 +262,7 @@ class _PushView extends StatefulWidget {
 class _PushViewState extends State<_PushView> {
   final _repoController = TextEditingController();
   final _commitController =
-      TextEditingController(text: 'Add Dart file from DartLab');
+      TextEditingController(text: 'Add Dart file from Dart IDE');
   bool _isPrivate = false;
   bool _isLoading = false;
   String? _statusMessage;

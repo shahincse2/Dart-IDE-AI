@@ -37,7 +37,7 @@ class IsolateRunner {
     _port = port;
 
     try {
-      final dir = Directory.systemTemp.createTempSync('dartlab_run_');
+      final dir = Directory.systemTemp.createTempSync('dart_ide_run_');
       _mailDir = dir;
       _stdin.attach(StdinMailbox(dir.path).deliver);
       _isolate = await Isolate.spawn(

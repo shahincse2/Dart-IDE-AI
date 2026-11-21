@@ -79,7 +79,7 @@ class ImportChannel(
     }
 
     private companion object {
-        const val CHANNEL = "dartlab/import"
+        const val CHANNEL = "dart_ide/import"
         const val REQUEST_CODE = 7421
     }
 }

@@ -3,7 +3,7 @@ import 'package:tom_d4rt/tom_d4rt.dart';
 import 'console_io_prelude.dart';
 import 'console_sink.dart';
 
-/// Registers the native half of DartLab's console I/O on [interpreter].
+/// Registers the native half of Dart IDE's console I/O on [interpreter].
 ///
 /// [readLine] answers `stdin.readLineSync()` and the older bare
 /// `readLineSync()`. It is allowed to block: the program runs in its own
@@ -25,18 +25,18 @@ void bindConsoleIo(
     );
   }
 
-  register('dartlabWrite', (args) {
+  register('dartIdeWrite', (args) {
     sink.writeOut(_text(args));
     return null;
   });
-  register('dartlabWriteErr', (args) {
+  register('dartIdeWriteErr', (args) {
     sink.writeErr(_text(args));
     return null;
   });
-  register('dartlabReadLine', (args) => readLine());
+  register('dartIdeReadLine', (args) => readLine());
   // Kept for programs written before stdin.readLineSync() was supported.
   register('readLineSync', (args) => readLine());
-  register('dartlabExit', (args) {
+  register('dartIdeExit', (args) {
     onExit(_exitCode(args));
     return null;
   });

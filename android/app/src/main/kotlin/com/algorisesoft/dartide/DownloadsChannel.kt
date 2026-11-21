@@ -51,7 +51,7 @@ class DownloadsChannel(
         }
     }
 
-    /** Returns where the file ended up, for example `Download/DartLab/main.dart`. */
+    /** Returns where the file ended up, for example `Download/Dart IDE/main.dart`. */
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun save(fileName: String, bytes: ByteArray, mimeType: String, subfolder: String): String {
         val folder = if (subfolder.isEmpty()) {
@@ -88,6 +88,6 @@ class DownloadsChannel(
     }
 
     private companion object {
-        const val CHANNEL = "dartlab/downloads"
+        const val CHANNEL = "dart_ide/downloads"
     }
 }

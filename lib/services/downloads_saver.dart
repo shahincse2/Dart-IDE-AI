@@ -6,12 +6,12 @@ import 'package:flutter/services.dart';
 /// (through MediaStore, see DownloadsChannel.kt): no file picker is opened
 /// and no storage permission is needed.
 class DownloadsSaver {
-  static const MethodChannel _channel = MethodChannel('dartlab/downloads');
+  static const MethodChannel _channel = MethodChannel('dart_ide/downloads');
 
   /// Only Android has this; elsewhere use the system save dialog.
   bool get isAvailable => Platform.isAndroid;
 
-  /// Returns where the file was saved (for example `Download/DartLab/a.dart`),
+  /// Returns where the file was saved (for example `Download/Dart IDE/a.dart`),
   /// or null if saving failed.
   ///
   /// Throws [UnsupportedError] when the phone is too old (before Android 10);
@@ -21,7 +21,7 @@ class DownloadsSaver {
     required Uint8List bytes,
     // Not text/plain: for a known type Android adds its own extension (main.dart.txt).
     String mimeType = 'application/octet-stream',
-    String subfolder = 'DartLab',
+    String subfolder = 'Dart IDE',
   }) async {
     try {
       return await _channel.invokeMethod<String>('saveToDownloads', {

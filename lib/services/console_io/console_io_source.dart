@@ -17,14 +17,14 @@ class PreparedSource {
 /// For a program that imports `dart:io` this
 ///   * refuses anything except `stdin`, `stdout`, `stderr` and `exit`,
 ///   * turns the import into a comment (same line, so line numbers hold),
-///   * appends the DartLab implementation of those four.
+///   * appends the Dart IDE implementation of those four.
 /// Programs that use neither `dart:io` nor `readLineSync` pass through as is.
 class ConsoleIoSource {
   ConsoleIoSource._();
 
   static const _allowedNames = {'stdin', 'stdout', 'stderr', 'exit'};
 
-  static const _sandboxNote = 'DartLab runs programs in a sandbox: from '
+  static const _sandboxNote = 'Dart IDE runs programs in a sandbox: from '
       'dart:io only stdin, stdout, stderr and exit are available. File, '
       'network and process access is switched off for your safety.';
 
@@ -94,6 +94,6 @@ class ConsoleIoSource {
   static String _removeImports(String code) =>
       code.replaceAllMapped(_dartIoImport, (match) {
         final lineBreaks = '\n'.allMatches(match.group(0)!).length;
-        return '// dart:io is provided by DartLab${'\n' * lineBreaks}';
+        return '// dart:io is provided by Dart IDE${'\n' * lineBreaks}';
       });
 }

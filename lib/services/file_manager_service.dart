@@ -5,7 +5,7 @@ import 'files/entry_transfer.dart';
 import 'files/project_tree_scanner.dart';
 import 'files/projects_store.dart';
 
-/// Every real filesystem operation DartLab needs: listing/creating/
+/// Every real filesystem operation Dart IDE needs: listing/creating/
 /// renaming/deleting projects, files, and folders, plus read/write for
 /// the editor's Save. Providers call these; nothing here talks to
 /// Flutter widgets, and nothing above this layer touches `dart:io`

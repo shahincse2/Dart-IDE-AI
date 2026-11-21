@@ -2,7 +2,7 @@ import 'package:dart_ide/services/system_file_chooser.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const channel = MethodChannel('dartlab/import');
+const channel = MethodChannel('dart_ide/import');
 
 void answerWith(Future<Object?>? Function(MethodCall call) handler) {
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

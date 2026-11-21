@@ -29,7 +29,7 @@ void main() {
       File(p.join(project.rootPath, relativePath)).existsSync();
 
   setUp(() async {
-    docs = Directory.systemTemp.createTempSync('dartlab_files_test');
+    docs = Directory.systemTemp.createTempSync('dart_ide_files_test');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_pathProviderChannel, (call) async {
       return call.method == 'getApplicationDocumentsDirectory'

@@ -8,12 +8,12 @@ import '../models/settings_model.dart';
 /// (shared_preferences today) can change later without touching any
 /// widget or provider code — providers only ever talk to services.
 class SettingsManager {
-  static const _keyThemeMode = 'dartlab.themeMode';
-  static const _keyFontSize = 'dartlab.editorFontSize';
-  static const _keyWordWrap = 'dartlab.wordWrap';
-  static const _keyIndentSize = 'dartlab.indentSize';
-  static const _keyAutoSave = 'dartlab.autoSaveEnabled';
-  static const _keyEditorTheme = 'dartlab.editorThemeName';
+  static const _keyThemeMode = 'dart_ide.themeMode';
+  static const _keyFontSize = 'dart_ide.editorFontSize';
+  static const _keyWordWrap = 'dart_ide.wordWrap';
+  static const _keyIndentSize = 'dart_ide.indentSize';
+  static const _keyAutoSave = 'dart_ide.autoSaveEnabled';
+  static const _keyEditorTheme = 'dart_ide.editorThemeName';
 
   Future<SettingsModel> load() async {
     final prefs = await SharedPreferences.getInstance();

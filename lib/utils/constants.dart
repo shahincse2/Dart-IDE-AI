@@ -9,7 +9,7 @@ class AppConstants {
   AppConstants._();
 
   // ---- App identity ----
-  static const String appName = 'DartLab';
+  static const String appName = 'Dart IDE';
 
   // ---- Spacing scale (4pt grid) ----
   static const double spaceXs = 4;

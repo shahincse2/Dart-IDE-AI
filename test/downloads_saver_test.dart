@@ -4,7 +4,7 @@ import 'package:dart_ide/services/downloads_saver.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const channel = MethodChannel('dartlab/downloads');
+const channel = MethodChannel('dart_ide/downloads');
 
 void answerWith(Future<Object?>? Function(MethodCall call) handler) {
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -25,7 +25,7 @@ void main() {
       MethodCall? received;
       answerWith((call) async {
         received = call;
-        return 'Download/DartLab/main.dart';
+        return 'Download/Dart IDE/main.dart';
       });
 
       final where = await DownloadsSaver().save(
@@ -33,14 +33,14 @@ void main() {
         bytes: Uint8List.fromList(utf8.encode('// শুভ')),
       );
 
-      expect(where, 'Download/DartLab/main.dart');
+      expect(where, 'Download/Dart IDE/main.dart');
       expect(received!.method, 'saveToDownloads');
       final args = received!.arguments as Map;
       expect(args['fileName'], 'main.dart');
       expect(utf8.decode(args['bytes'] as Uint8List), '// শুভ');
       expect(args['mimeType'],
           'application/octet-stream'); // keeps main.dart as main.dart
-      expect(args['subfolder'], 'DartLab');
+      expect(args['subfolder'], 'Dart IDE');
     });
 
     test('a failure on the phone gives null', () async {

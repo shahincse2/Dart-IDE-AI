@@ -34,7 +34,7 @@ class EditorFileCommands {
 
   void save() => _editors.withActive((path, c) => _files.saveNow(path, c.text));
 
-  /// Saves the file ON THE DEVICE (Downloads/DartLab on Android) and says where.
+  /// Saves the file ON THE DEVICE (Downloads/Dart IDE on Android) and says where.
   void export() => _editors.withActive(
         (path, c) => exportWithMessage(
           _context(),

@@ -18,14 +18,14 @@ import 'utils/themes.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const DartLabApp());
+  runApp(const DartIdeApp());
 }
 
 /// Root widget. Loads persisted settings once, then hands theme mode
 /// down through SettingsProvider so any screen can react to changes
 /// (e.g. Settings screen in Phase 10) without rebuilding this widget.
-class DartLabApp extends StatelessWidget {
-  const DartLabApp({super.key});
+class DartIdeApp extends StatelessWidget {
+  const DartIdeApp({super.key});
 
   @override
   Widget build(BuildContext context) {

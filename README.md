@@ -1,4 +1,4 @@
-# DartLab — Phase 3: Dart Runner
+# Dart IDE — Phase 3: Dart Runner
 
 ## What's new in this phase
 

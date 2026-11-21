@@ -42,7 +42,7 @@ class FileShareService {
   /// Saves a .dart file ON THE DEVICE, never to other apps (sharing is a
   /// separate menu item).
   ///
-  /// On Android it goes straight into Downloads/DartLab under its own name:
+  /// On Android it goes straight into Downloads/Dart IDE under its own name:
   /// the system save dialog is not used, because on some phones that dialog
   /// crashes (and the app with it). Android 9 and older, and other systems,
   /// use the system save dialog.

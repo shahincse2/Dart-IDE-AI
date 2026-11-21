@@ -11,7 +11,7 @@ import 'file_defaults.dart';
 class EntryOperations {
   /// Creates a new file inside [parentRelativePath] (empty string for
   /// the project root). If [fileName] doesn't end in `.dart`, that
-  /// extension is added — DartLab only edits Dart source. Returns the
+  /// extension is added — Dart IDE only edits Dart source. Returns the
   /// final relative path, which may differ from the requested name if
   /// a file with that name already existed (a numbered suffix is
   /// added rather than overwriting).
