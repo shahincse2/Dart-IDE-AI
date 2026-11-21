@@ -8,6 +8,8 @@ import '../services/open_files_tracker.dart';
 import '../services/restore_open_files.dart';
 import '../utils/constants.dart';
 import '../widgets/name_dialog.dart';
+import '../widgets/project_actions.dart';
+import '../widgets/project_menu.dart';
 import 'editor_screen.dart';
 import 'settings_screen.dart';
 
@@ -62,7 +64,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: ListTile(
                           leading: const Icon(Icons.folder_outlined),
                           title: Text(project.name),
-                          trailing: const Icon(Icons.chevron_right_rounded),
+                          trailing: ProjectMenu(
+                            onSelected: (action) => switch (action) {
+                              ProjectAction.rename =>
+                                renameProjectFlow(context, project),
+                              ProjectAction.delete =>
+                                deleteProjectFlow(context, project),
+                            },
+                          ),
                           onTap: () => _openProject(context, project),
                         ),
                       );

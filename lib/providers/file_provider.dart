@@ -66,6 +66,24 @@ class FileProvider extends ChangeNotifier
     await loadProjects();
   }
 
+  /// Renames a project's folder; returns the project with its new name.
+  ///
+  /// If it is the open project its tabs stay open (the paths inside a project
+  /// do not change); what is waiting to be saved is written first, because
+  /// the folder is about to move.
+  Future<ProjectModel> renameProject(
+    ProjectModel project,
+    String newName,
+  ) async {
+    final isOpen = _currentProject?.id == project.id;
+    if (isOpen) await flushAllPendingSaves();
+    final renamed = await _service.renameProject(project, newName);
+    if (isOpen) _currentProject = renamed;
+    await loadProjects();
+    if (isOpen) await refreshFileTree();
+    return renamed;
+  }
+
   /// Switches projects, closing (and flushing) whatever tabs were open
   /// from the previous one, then opens an initial file if it can find
   /// one (`main.dart` if present, else the first file in the tree).

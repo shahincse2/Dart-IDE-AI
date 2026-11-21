@@ -14,4 +14,10 @@ class LastProjectStore {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key, projectId);
   }
+
+  /// Nothing is remembered any more (the project is gone).
+  Future<void> clear() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
+  }
 }

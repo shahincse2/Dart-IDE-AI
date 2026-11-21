@@ -4,6 +4,7 @@ import '../../utils/constants.dart';
 import '../../utils/themes.dart';
 import '../code_editor_controller.dart';
 import 'line_highlights.dart';
+import 'scroll_offset.dart';
 
 /// The text itself: the error-line and current-line highlights behind the
 /// TextField, and the fold chips on top. With word wrap off the whole thing
@@ -46,15 +47,12 @@ class EditorTextArea extends StatelessWidget {
     required this.caretMargin,
   });
 
-  double get _scrollOffset =>
-      scrollController.hasClients ? scrollController.offset : 0.0;
-
   /// [build] is run again on every scroll tick, with the new offset, and
   /// nothing else is: the text field next to it stays as it is.
   Widget _followingScroll(Widget Function(double scrollOffset) build) {
     return ListenableBuilder(
       listenable: scrollController,
-      builder: (context, _) => build(_scrollOffset),
+      builder: (context, _) => build(scrollOffsetOf(scrollController)),
     );
   }
 

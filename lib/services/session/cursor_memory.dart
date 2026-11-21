@@ -41,6 +41,22 @@ class CursorMemory {
     await _loading;
   }
 
+  /// The project being edited has another id now (it was renamed); what is
+  /// remembered for it stays.
+  void renameProject(Object oldId, Object newId) {
+    if (_projectId == oldId) _projectId = newId;
+  }
+
+  /// The project was deleted: nothing more is remembered or written for it.
+  void forgetProject(Object id) {
+    if (_projectId != id) return;
+    _timer?.cancel();
+    _timer = null;
+    _projectId = null;
+    _cursors = {};
+    _unsaved = false;
+  }
+
   /// The remembered cursor offset in [path], or null.
   int? cursorOf(String path) => _cursors[path];
 

@@ -10,6 +10,7 @@ import 'editor_text_style.dart';
 import 'fold_chips.dart';
 import 'line_layout.dart';
 import 'line_number_gutter.dart';
+import 'scroll_offset.dart';
 
 /// The editor drawn: the line-number gutter, a thin divider and the text area,
 /// laid out from the measured [LineLayout]. Rebuilt by [CodeEditor] whenever
@@ -41,10 +42,6 @@ class EditorSurface extends StatelessWidget {
 
   /// Width reserved at the left of the gutter for the fold chevron.
   static const double chevronWidth = 16.0;
-
-  /// How far the editor is scrolled (0 until it has a scroll position).
-  double get _scrollOffset =>
-      scrollController.hasClients ? scrollController.offset : 0.0;
 
   double _gutterWidth(int lineCount) {
     final digits = lineCount.toString().length;
@@ -102,7 +99,7 @@ class EditorSurface extends StatelessWidget {
                   lineTops: layout.lineTops,
                   hiddenLines: hiddenLines,
                   currentLine: currentLine,
-                  scrollOffset: _scrollOffset,
+                  scrollOffset: scrollOffsetOf(scrollController),
                   // The CURRENT height of the editor area. (Reading the scroll
                   // position's viewportDimension here was stale after any
                   // layout change — keyboard, console panel — so numbers below

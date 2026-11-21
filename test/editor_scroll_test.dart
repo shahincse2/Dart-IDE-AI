@@ -109,4 +109,41 @@ void main() {
     expect(find.text('1'), findsNothing);
     expect(find.text('250'), findsOneWidget);
   });
+
+  testWidgets('switching word wrap on and off does not break the editor', (tester) async {
+    final controller = _CountingController(
+      List.generate(120, (i) => 'int line$i = $i;').join('\n'),
+    );
+    final scroll = ScrollController();
+    final focus = FocusNode();
+    addTearDown(() {
+      scroll.dispose();
+      focus.dispose();
+    });
+
+    Widget editor({required bool wordWrap}) => MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 300,
+              child: EditorSurface(
+                controller: controller,
+                layout: LineLayout(),
+                scrollController: scroll,
+                focusNode: focus,
+                undoController: null,
+                fontSize: 14,
+                wordWrap: wordWrap,
+                regionByStart: const {},
+              ),
+            ),
+          ),
+        );
+
+    await tester.pumpWidget(editor(wordWrap: false));
+    await tester.pumpWidget(editor(wordWrap: true));
+    await tester.pumpWidget(editor(wordWrap: false));
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(TextField), findsOneWidget);
+  });
 }
