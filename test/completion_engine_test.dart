@@ -1,5 +1,5 @@
-import 'package:dartlab/utils/completion_engine.dart';
-import 'package:dartlab/utils/snippet_template.dart';
+import 'package:dart_ide/utils/completion_engine.dart';
+import 'package:dart_ide/utils/snippet_template.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 CompletionItem snippetNamed(String label) =>

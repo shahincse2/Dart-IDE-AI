@@ -1,4 +1,4 @@
-import 'package:dartlab/widgets/console/console_height.dart';
+import 'package:dart_ide/widgets/console/console_height.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

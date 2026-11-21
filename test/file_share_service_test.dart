@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:dartlab/services/file_share_service.dart';
-import 'package:dartlab/services/system_file_chooser.dart';
+import 'package:dart_ide/services/file_share_service.dart';
+import 'package:dart_ide/services/system_file_chooser.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// A chooser that "picks" a prepared file, as if Android's list was used.

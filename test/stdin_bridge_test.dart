@@ -1,4 +1,4 @@
-import 'package:dartlab/services/runner/stdin_bridge.dart';
+import 'package:dart_ide/services/runner/stdin_bridge.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

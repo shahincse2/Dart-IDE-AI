@@ -1,6 +1,6 @@
-import 'package:dartlab/utils/themes.dart';
-import 'package:dartlab/widgets/code_editor_controller.dart';
-import 'package:dartlab/widgets/completion_model.dart';
+import 'package:dart_ide/utils/themes.dart';
+import 'package:dart_ide/widgets/code_editor_controller.dart';
+import 'package:dart_ide/widgets/completion_model.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';

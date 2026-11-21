@@ -1,9 +1,9 @@
-import 'package:dartlab/utils/dart_syntax/comment_scan.dart';
-import 'package:dartlab/utils/dart_syntax/identifier_scan.dart';
-import 'package:dartlab/utils/dart_syntax/interpolation_scan.dart';
-import 'package:dartlab/utils/dart_syntax/number_scan.dart';
-import 'package:dartlab/utils/dart_syntax/string_basics.dart';
-import 'package:dartlab/utils/dart_syntax_highlighter.dart';
+import 'package:dart_ide/utils/dart_syntax/comment_scan.dart';
+import 'package:dart_ide/utils/dart_syntax/identifier_scan.dart';
+import 'package:dart_ide/utils/dart_syntax/interpolation_scan.dart';
+import 'package:dart_ide/utils/dart_syntax/number_scan.dart';
+import 'package:dart_ide/utils/dart_syntax/string_basics.dart';
+import 'package:dart_ide/utils/dart_syntax_highlighter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// "type:text" for every token, to read a result at a glance.

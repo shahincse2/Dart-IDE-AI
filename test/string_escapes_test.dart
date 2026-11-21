@@ -1,4 +1,4 @@
-import 'package:dartlab/utils/string_escapes.dart';
+import 'package:dart_ide/utils/string_escapes.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

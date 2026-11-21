@@ -1,5 +1,5 @@
-import 'package:dartlab/utils/fold_regions.dart';
-import 'package:dartlab/utils/fold_remap.dart';
+import 'package:dart_ide/utils/fold_regions.dart';
+import 'package:dart_ide/utils/fold_remap.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const block = 'int x;\nvoid main() {\n  a();\n  b();\n}\n'; // fold starts on line 1

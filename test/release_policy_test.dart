@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:dartlab/utils/feature_flags.dart';
+import 'package:dart_ide/utils/feature_flags.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// These tests guard what the privacy policy and the Play Data Safety form say

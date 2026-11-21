@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:dartlab/models/project_model.dart';
-import 'package:dartlab/services/file_manager_service.dart';
+import 'package:dart_ide/models/project_model.dart';
+import 'package:dart_ide/services/file_manager_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 

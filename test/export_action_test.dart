@@ -1,5 +1,5 @@
-import 'package:dartlab/services/file_share_service.dart';
-import 'package:dartlab/widgets/export_action.dart';
+import 'package:dart_ide/services/file_share_service.dart';
+import 'package:dart_ide/widgets/export_action.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

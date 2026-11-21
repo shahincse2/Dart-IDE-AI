@@ -1,4 +1,4 @@
-import 'package:dartlab/utils/span_cache.dart';
+import 'package:dart_ide/utils/span_cache.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 

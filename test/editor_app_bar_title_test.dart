@@ -1,4 +1,4 @@
-import 'package:dartlab/widgets/editor_app_bar_title.dart';
+import 'package:dart_ide/widgets/editor_app_bar_title.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

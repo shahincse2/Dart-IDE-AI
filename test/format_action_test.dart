@@ -1,7 +1,7 @@
-import 'package:dartlab/services/code_formatter.dart';
-import 'package:dartlab/utils/themes.dart';
-import 'package:dartlab/widgets/code_editor_controller.dart';
-import 'package:dartlab/widgets/format_action.dart';
+import 'package:dart_ide/services/code_formatter.dart';
+import 'package:dart_ide/utils/themes.dart';
+import 'package:dart_ide/widgets/code_editor_controller.dart';
+import 'package:dart_ide/widgets/format_action.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -1,4 +1,4 @@
-import 'package:dartlab/services/runner/runner_errors.dart';
+import 'package:dart_ide/services/runner/runner_errors.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const parseError = 'SourceCodeException: Fatal parsing errors for the direct '

@@ -1,6 +1,6 @@
-import 'package:dartlab/screens/editor_screen.dart';
-import 'package:dartlab/services/session/cursor_memory.dart';
-import 'package:dartlab/widgets/session_keeper.dart';
+import 'package:dart_ide/screens/editor_screen.dart';
+import 'package:dart_ide/services/session/cursor_memory.dart';
+import 'package:dart_ide/widgets/session_keeper.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

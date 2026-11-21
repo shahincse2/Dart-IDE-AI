@@ -1,4 +1,4 @@
-import 'package:dartlab/services/runner/run_timer.dart';
+import 'package:dart_ide/services/runner/run_timer.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Future<void> wait(int milliseconds) =>

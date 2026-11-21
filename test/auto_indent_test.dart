@@ -1,4 +1,4 @@
-import 'package:dartlab/utils/auto_indent.dart';
+import 'package:dart_ide/utils/auto_indent.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 

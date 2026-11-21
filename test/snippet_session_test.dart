@@ -1,5 +1,5 @@
-import 'package:dartlab/utils/snippet_session.dart';
-import 'package:dartlab/utils/text_edit.dart';
+import 'package:dart_ide/utils/snippet_session.dart';
+import 'package:dart_ide/utils/text_edit.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

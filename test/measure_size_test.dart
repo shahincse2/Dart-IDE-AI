@@ -1,4 +1,4 @@
-import 'package:dartlab/widgets/measure_size.dart';
+import 'package:dart_ide/widgets/measure_size.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 

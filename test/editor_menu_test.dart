@@ -1,6 +1,6 @@
-import 'package:dartlab/screens/editor/editor_actions.dart';
-import 'package:dartlab/screens/editor/editor_menu.dart';
-import 'package:dartlab/utils/feature_flags.dart';
+import 'package:dart_ide/screens/editor/editor_actions.dart';
+import 'package:dart_ide/screens/editor/editor_menu.dart';
+import 'package:dart_ide/utils/feature_flags.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -1,4 +1,4 @@
-import 'package:dartlab/widgets/name_dialog.dart';
+import 'package:dart_ide/widgets/name_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -1,8 +1,8 @@
-import 'package:dartlab/providers/console_provider.dart';
-import 'package:dartlab/providers/runner_provider.dart';
-import 'package:dartlab/providers/settings_provider.dart';
-import 'package:dartlab/widgets/console/console_stdin_bar.dart';
-import 'package:dartlab/widgets/console_panel.dart';
+import 'package:dart_ide/providers/console_provider.dart';
+import 'package:dart_ide/providers/runner_provider.dart';
+import 'package:dart_ide/providers/settings_provider.dart';
+import 'package:dart_ide/widgets/console/console_stdin_bar.dart';
+import 'package:dart_ide/widgets/console_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';

@@ -1,6 +1,6 @@
-import 'package:dartlab/models/project_file_node.dart';
-import 'package:dartlab/models/tree_entry_ref.dart';
-import 'package:dartlab/utils/transfer_destinations.dart';
+import 'package:dart_ide/models/project_file_node.dart';
+import 'package:dart_ide/models/tree_entry_ref.dart';
+import 'package:dart_ide/utils/transfer_destinations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 ProjectFileNode folder(String path, [List<ProjectFileNode> children = const []]) =>

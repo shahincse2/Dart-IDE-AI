@@ -1,5 +1,5 @@
-import 'package:dartlab/models/tree_entry_ref.dart';
-import 'package:dartlab/providers/tree_selection_provider.dart';
+import 'package:dart_ide/models/tree_entry_ref.dart';
+import 'package:dart_ide/providers/tree_selection_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const a = TreeEntryRef('lib/a.dart', isFolder: false);

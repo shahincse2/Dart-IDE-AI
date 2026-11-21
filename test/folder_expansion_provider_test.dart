@@ -1,4 +1,4 @@
-import 'package:dartlab/providers/folder_expansion_provider.dart';
+import 'package:dart_ide/providers/folder_expansion_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

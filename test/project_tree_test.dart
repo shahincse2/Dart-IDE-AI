@@ -1,5 +1,5 @@
-import 'package:dartlab/models/project_file_node.dart';
-import 'package:dartlab/utils/project_tree.dart';
+import 'package:dart_ide/models/project_file_node.dart';
+import 'package:dart_ide/utils/project_tree.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 ProjectFileNode folder(String path, [List<ProjectFileNode> children = const []]) =>

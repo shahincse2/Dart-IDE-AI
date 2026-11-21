@@ -1,4 +1,4 @@
-import 'package:dartlab/services/system_file_chooser.dart';
+import 'package:dart_ide/services/system_file_chooser.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 

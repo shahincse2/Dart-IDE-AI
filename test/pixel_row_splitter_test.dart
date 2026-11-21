@@ -1,4 +1,4 @@
-import 'package:dartlab/widgets/console/pixel_row_splitter.dart';
+import 'package:dart_ide/widgets/console/pixel_row_splitter.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 

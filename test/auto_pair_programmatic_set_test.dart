@@ -1,4 +1,4 @@
-import 'package:dartlab/utils/auto_pair.dart';
+import 'package:dart_ide/utils/auto_pair.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 

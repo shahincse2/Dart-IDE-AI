@@ -1,5 +1,5 @@
-import 'package:dartlab/utils/fold_regions.dart';
-import 'package:dartlab/widgets/code_editor/line_layout.dart';
+import 'package:dart_ide/utils/fold_regions.dart';
+import 'package:dart_ide/widgets/code_editor/line_layout.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

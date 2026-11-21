@@ -1,9 +1,9 @@
-import 'package:dartlab/utils/dart_syntax_highlighter.dart';
-import 'package:dartlab/utils/fold_regions.dart';
-import 'package:dartlab/utils/hidden_text.dart';
-import 'package:dartlab/utils/highlight_spans.dart';
-import 'package:dartlab/utils/string_escapes.dart';
-import 'package:dartlab/utils/themes.dart';
+import 'package:dart_ide/utils/dart_syntax_highlighter.dart';
+import 'package:dart_ide/utils/fold_regions.dart';
+import 'package:dart_ide/utils/hidden_text.dart';
+import 'package:dart_ide/utils/highlight_spans.dart';
+import 'package:dart_ide/utils/string_escapes.dart';
+import 'package:dart_ide/utils/themes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

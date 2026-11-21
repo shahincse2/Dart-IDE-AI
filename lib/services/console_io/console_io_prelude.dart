@@ -1,5 +1,5 @@
 /// Virtual library that holds the native half of console I/O.
-const String kConsoleIoLibrary = 'package:dartlab/console_io.dart';
+const String kConsoleIoLibrary = 'package:dart_ide/console_io.dart';
 
 /// Dart source that gives a program `stdout`, `stderr`, `stdin` and `exit`.
 ///

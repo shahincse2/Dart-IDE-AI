@@ -1,5 +1,5 @@
-import 'package:dartlab/utils/themes.dart';
-import 'package:dartlab/widgets/console/console_reopen_bar.dart';
+import 'package:dart_ide/utils/themes.dart';
+import 'package:dart_ide/widgets/console/console_reopen_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

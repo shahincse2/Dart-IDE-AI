@@ -1,4 +1,4 @@
-import 'package:dartlab/services/console_io/partial_line_buffer.dart';
+import 'package:dart_ide/services/console_io/partial_line_buffer.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

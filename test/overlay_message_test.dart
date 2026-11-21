@@ -1,4 +1,4 @@
-import 'package:dartlab/widgets/overlay_message.dart';
+import 'package:dart_ide/widgets/overlay_message.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -1,6 +1,6 @@
-import 'package:dartlab/services/session/cursor_memory.dart';
-import 'package:dartlab/services/session/cursor_store.dart';
-import 'package:dartlab/services/session/last_project_store.dart';
+import 'package:dart_ide/services/session/cursor_memory.dart';
+import 'package:dart_ide/services/session/cursor_store.dart';
+import 'package:dart_ide/services/session/last_project_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

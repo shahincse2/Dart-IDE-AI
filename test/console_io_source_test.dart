@@ -1,4 +1,4 @@
-import 'package:dartlab/services/console_io/console_io_source.dart';
+import 'package:dart_ide/services/console_io/console_io_source.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -86,7 +86,7 @@ void main() {
       final result = ConsoleIoSource.prepare(code);
 
       expect(result.error, isNull);
-      expect(result.source, startsWith("import 'package:dartlab/console_io.dart'; void main()"));
+      expect(result.source, startsWith("import 'package:dart_ide/console_io.dart'; void main()"));
       expect(result.source, isNot(contains('class _DartLabOutput')));
     });
   });

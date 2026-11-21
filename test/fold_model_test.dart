@@ -1,4 +1,4 @@
-import 'package:dartlab/utils/fold_model.dart';
+import 'package:dart_ide/utils/fold_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const block = 'void main() {\n  a();\n  b();\n}\n';

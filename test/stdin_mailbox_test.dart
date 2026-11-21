@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:dartlab/services/runner/stdin_mailbox.dart';
+import 'package:dart_ide/services/runner/stdin_mailbox.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
-import 'package:dartlab/models/console_event.dart';
-import 'package:dartlab/widgets/console/console_line_builder.dart';
+import 'package:dart_ide/models/console_event.dart';
+import 'package:dart_ide/widgets/console/console_line_builder.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// A stand-in splitter: cuts every [size] characters.

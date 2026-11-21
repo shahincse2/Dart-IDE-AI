@@ -1,4 +1,4 @@
-import 'package:dartlab/services/dart_style_formatter.dart';
+import 'package:dart_ide/services/dart_style_formatter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

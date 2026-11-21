@@ -1,4 +1,4 @@
-import 'package:dartlab/widgets/keyboard_avoiding_sheet.dart';
+import 'package:dart_ide/widgets/keyboard_avoiding_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

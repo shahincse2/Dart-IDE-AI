@@ -1,5 +1,5 @@
-import 'package:dartlab/utils/fold_regions.dart';
-import 'package:dartlab/utils/hidden_text.dart';
+import 'package:dart_ide/utils/fold_regions.dart';
+import 'package:dart_ide/utils/hidden_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

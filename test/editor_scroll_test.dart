@@ -1,7 +1,7 @@
-import 'package:dartlab/utils/themes.dart';
-import 'package:dartlab/widgets/code_editor/editor_surface.dart';
-import 'package:dartlab/widgets/code_editor/line_layout.dart';
-import 'package:dartlab/widgets/code_editor_controller.dart';
+import 'package:dart_ide/utils/themes.dart';
+import 'package:dart_ide/widgets/code_editor/editor_surface.dart';
+import 'package:dart_ide/widgets/code_editor/line_layout.dart';
+import 'package:dart_ide/widgets/code_editor_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
