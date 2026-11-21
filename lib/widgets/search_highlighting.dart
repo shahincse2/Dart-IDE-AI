@@ -8,6 +8,10 @@ mixin SearchHighlighting on TextEditingController {
   List<int> _searchMatchStarts = const [];
   int _searchMatchLength = 0;
   int _activeSearchMatch = -1;
+  int _searchVersion = 0;
+
+  /// Changes whenever the highlighted matches change.
+  int get searchVersion => _searchVersion;
 
   /// Sets which character ranges Find & Replace's search box currently
   /// matches, all the same length ([queryLength]), so they render with a
@@ -16,6 +20,7 @@ mixin SearchHighlighting on TextEditingController {
     _searchMatchStarts = matchStarts;
     _searchMatchLength = queryLength;
     if (matchStarts.isEmpty) _activeSearchMatch = -1;
+    _searchVersion++;
     notifyListeners();
   }
 
@@ -24,6 +29,7 @@ mixin SearchHighlighting on TextEditingController {
   /// than the others.
   void setActiveSearchMatch(int index) {
     _activeSearchMatch = index;
+    _searchVersion++;
     notifyListeners();
   }
 

@@ -58,6 +58,7 @@ TextEditingValue applyAutoPair(
   // Cases 2 & 3 both require a plain single-character insertion at the old
   // cursor position with no prior selection.
   final isSingleCharTyped = newText.length == oldText.length + 1 &&
+      oldSel.isValid &&
       oldSel.isCollapsed &&
       newSel.isCollapsed &&
       newSel.baseOffset == oldSel.baseOffset + 1;

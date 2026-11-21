@@ -50,7 +50,6 @@ class _CodeEditorState extends State<CodeEditor> {
   void initState() {
     super.initState();
     widget.controller.addListener(_onControllerChanged);
-    _scrollController.addListener(_onScrollChanged);
     // A file opened with its cursor deep inside (remembered from last time):
     // jump to that part, so the user sees where they were.
     WidgetsBinding.instance
@@ -81,12 +80,6 @@ class _CodeEditorState extends State<CodeEditor> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureCursorVisible());
   }
 
-  /// The user scrolled — just redraw the gutter/highlights to track the new
-  /// offset. Deliberately does NOT scroll the cursor into view.
-  void _onScrollChanged() {
-    setState(() {});
-  }
-
   void _ensureCursorVisible({bool animate = true}) {
     if (!mounted) return;
     scrollCursorIntoView(
@@ -102,7 +95,6 @@ class _CodeEditorState extends State<CodeEditor> {
   @override
   void dispose() {
     widget.controller.removeListener(_onControllerChanged);
-    _scrollController.removeListener(_onScrollChanged);
     _scrollController.dispose();
     _focusNode.dispose();
     super.dispose();

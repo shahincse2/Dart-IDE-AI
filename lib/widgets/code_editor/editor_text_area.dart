@@ -14,13 +14,13 @@ class EditorTextArea extends StatelessWidget {
   final double lineHeight;
   final int currentLine;
   final List<double> lineTops;
-  final double scrollOffset;
   final ScrollController scrollController;
   final FocusNode focusNode;
   final UndoHistoryController? undoController;
   final TextStyle textStyle;
   final StrutStyle strutStyle;
-  final List<Widget> chips;
+  /// The fold chips for a given scroll offset.
+  final List<Widget> Function(double scrollOffset) chipsAt;
   final bool wordWrap;
   final double maxLineWidth;
 
@@ -35,17 +35,28 @@ class EditorTextArea extends StatelessWidget {
     required this.lineHeight,
     required this.currentLine,
     required this.lineTops,
-    required this.scrollOffset,
     required this.scrollController,
     required this.focusNode,
     required this.undoController,
     required this.textStyle,
     required this.strutStyle,
-    required this.chips,
+    required this.chipsAt,
     required this.wordWrap,
     required this.maxLineWidth,
     required this.caretMargin,
   });
+
+  double get _scrollOffset =>
+      scrollController.hasClients ? scrollController.offset : 0.0;
+
+  /// [build] is run again on every scroll tick, with the new offset, and
+  /// nothing else is: the text field next to it stays as it is.
+  Widget _followingScroll(Widget Function(double scrollOffset) build) {
+    return ListenableBuilder(
+      listenable: scrollController,
+      builder: (context, _) => build(_scrollOffset),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,21 +64,25 @@ class EditorTextArea extends StatelessWidget {
       builder: (context, constraints) {
         final editorStack = Stack(
           children: [
-            ErrorLineHighlight(
-              scheme: scheme,
-              lineHeight: lineHeight,
-              errorLine: controller.errorLine,
-              lineTops: lineTops,
-              scrollOffset: scrollOffset,
+            _followingScroll(
+              (scrollOffset) => ErrorLineHighlight(
+                scheme: scheme,
+                lineHeight: lineHeight,
+                errorLine: controller.errorLine,
+                lineTops: lineTops,
+                scrollOffset: scrollOffset,
+              ),
             ),
-            CurrentLineHighlight(
-              scheme: scheme,
-              lineHeight: lineHeight,
-              currentLine: currentLine,
-              lineTops: lineTops,
-              scrollOffset: scrollOffset,
-              hasSelection: controller.selection.isValid &&
-                  controller.selection.isCollapsed,
+            _followingScroll(
+              (scrollOffset) => CurrentLineHighlight(
+                scheme: scheme,
+                lineHeight: lineHeight,
+                currentLine: currentLine,
+                lineTops: lineTops,
+                scrollOffset: scrollOffset,
+                hasSelection: controller.selection.isValid &&
+                    controller.selection.isCollapsed,
+              ),
             ),
             Padding(
               padding: const EdgeInsets.only(left: AppConstants.spaceSm),
@@ -93,7 +108,14 @@ class EditorTextArea extends StatelessWidget {
                 ),
               ),
             ),
-            ...chips,
+            Positioned.fill(
+              child: _followingScroll((scrollOffset) {
+                final chips = chipsAt(scrollOffset);
+                return chips.isEmpty
+                    ? const SizedBox.shrink()
+                    : Stack(clipBehavior: Clip.none, children: chips);
+              }),
+            ),
           ],
         );
 

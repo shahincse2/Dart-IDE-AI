@@ -42,12 +42,9 @@ class EditorSurface extends StatelessWidget {
   /// Width reserved at the left of the gutter for the fold chevron.
   static const double chevronWidth = 16.0;
 
-  int _currentLine() {
-    final offset = controller.selection.baseOffset;
-    if (offset < 0) return -1;
-    final text = controller.text;
-    return '\n'.allMatches(text.substring(0, offset.clamp(0, text.length))).length;
-  }
+  /// How far the editor is scrolled (0 until it has a scroll position).
+  double get _scrollOffset =>
+      scrollController.hasClients ? scrollController.offset : 0.0;
 
   double _gutterWidth(int lineCount) {
     final digits = lineCount.toString().length;
@@ -62,9 +59,8 @@ class EditorSurface extends StatelessWidget {
     final scheme = controller.scheme;
     final text = controller.text;
     final lineHeight = editorLineHeight(fontSize);
-    final currentLine = _currentLine();
-    final scrollOffset = scrollController.hasClients ? scrollController.offset : 0.0;
-    final gutterWidth = _gutterWidth('\n'.allMatches(text).length + 1);
+    final currentLine = controller.currentLine;
+    final gutterWidth = _gutterWidth(controller.lineCount);
     final textStyle = editorTextStyle(context, scheme, fontSize);
     final strut = editorStrutStyle(fontSize);
     final hiddenLines = controller.hiddenLineRanges;
@@ -92,7 +88,12 @@ class EditorSurface extends StatelessWidget {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                LineNumberGutter(
+                // Only what depends on the scroll offset redraws while scrolling
+                // (the gutter, the line highlights, the fold chips): rebuilding
+                // the text field on every scroll tick made scrolling stutter.
+                ListenableBuilder(
+                  listenable: scrollController,
+                  builder: (context, _) => LineNumberGutter(
                   scheme: scheme,
                   lineHeight: lineHeight,
                   fontSize: fontSize,
@@ -101,7 +102,7 @@ class EditorSurface extends StatelessWidget {
                   lineTops: layout.lineTops,
                   hiddenLines: hiddenLines,
                   currentLine: currentLine,
-                  scrollOffset: scrollOffset,
+                  scrollOffset: _scrollOffset,
                   // The CURRENT height of the editor area. (Reading the scroll
                   // position's viewportDimension here was stale after any
                   // layout change — keyboard, console panel — so numbers below
@@ -111,6 +112,7 @@ class EditorSurface extends StatelessWidget {
                   regionByStart: regionByStart,
                   isFolded: controller.isFolded,
                   onToggleFold: controller.toggleFold,
+                  ),
                 ),
                 Container(
                     width: 0.5,
@@ -122,7 +124,6 @@ class EditorSurface extends StatelessWidget {
                     lineHeight: lineHeight,
                     currentLine: currentLine,
                     lineTops: layout.lineTops,
-                    scrollOffset: scrollOffset,
                     scrollController: scrollController,
                     focusNode: focusNode,
                     undoController: undoController,
@@ -131,7 +132,7 @@ class EditorSurface extends StatelessWidget {
                     wordWrap: wordWrap,
                     maxLineWidth: layout.maxLineWidth,
                     caretMargin: caretMargin,
-                    chips: buildFoldChips(
+                    chipsAt: (scrollOffset) => buildFoldChips(
                       controller: controller,
                       scheme: scheme,
                       layout: layout,

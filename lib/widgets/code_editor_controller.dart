@@ -6,11 +6,14 @@ import '../utils/auto_indent.dart';
 import '../utils/auto_pair.dart';
 import '../utils/bracket_matcher.dart';
 import '../utils/dart_syntax_highlighter.dart';
-import '../utils/hidden_text.dart';
 import '../utils/highlight_spans.dart';
+import '../utils/hidden_text.dart';
+import '../utils/span_cache.dart';
 import '../utils/string_escapes.dart';
+import '../utils/syntax_cache.dart';
 import '../utils/themes.dart';
 import 'code_folding.dart';
+import 'line_index.dart';
 import 'search_highlighting.dart';
 
 /// A [TextEditingController] that syntax-highlights Dart code, shows
@@ -23,15 +26,12 @@ import 'search_highlighting.dart';
 /// coloured text in `utils/highlight_spans.dart`. This class ties them to the
 /// text and the selection.
 class CodeEditorController extends TextEditingController
-    with CodeFolding, SearchHighlighting {
+    with CodeFolding, SearchHighlighting, LineIndex {
   EditorColorScheme _scheme;
   int _indentSize;
 
-  List<SyntaxToken> _cachedTokens = const [];
-  String _cachedTokenText = '';
-
-  EscapeRanges _cachedEscapes = EscapeRanges.empty;
-  String _cachedEscapeText = '';
+  final SyntaxCache _syntax = SyntaxCache();
+  final SpanCache _spans = SpanCache();
 
   int? _errorLine;
   bool _isDisposed = false;
@@ -66,31 +66,11 @@ class CodeEditorController extends TextEditingController
   /// Tokens for the current text, recomputed only when the text actually
   /// changes (not on every cursor move / rebuild).
   @override
-  List<SyntaxToken> get tokens {
-    if (text != _cachedTokenText) {
-      _cachedTokens = tokenizeDart(text);
-      _cachedTokenText = text;
-    }
-    return _cachedTokens;
-  }
+  List<SyntaxToken> get tokens => _syntax.tokensFor(text);
 
   /// Escape sequences (\n, \t, \u00e9 ...) inside string literals, found again
   /// only when the text changes.
-  EscapeRanges get escapes {
-    if (text != _cachedEscapeText) {
-      final stringRanges = <int>[];
-      for (final t in tokens) {
-        if (t.type == TokenType.string) {
-          stringRanges
-            ..add(t.start)
-            ..add(t.end);
-        }
-      }
-      _cachedEscapes = findStringEscapes(text, stringRanges);
-      _cachedEscapeText = text;
-    }
-    return _cachedEscapes;
-  }
+  EscapeRanges get escapes => _syntax.escapesFor(text);
 
   /// 1-indexed line a runtime/syntax error was reported on (Section 35), or
   /// null for no marker. This is a best-effort heuristic — see
@@ -125,12 +105,28 @@ class CodeEditorController extends TextEditingController
     unfoldIfSelectionHidden();
   }
 
+  /// The coloured text. The text field asks for it on every rebuild (scrolling
+  /// included), so the same question gets the same answer without any work.
   @override
   TextSpan buildTextSpan({
     required BuildContext context,
     TextStyle? style,
     required bool withComposing,
   }) {
+    final inputs = (
+      text,
+      style,
+      withComposing,
+      value.composing,
+      value.selection,
+      searchVersion,
+      hiddenSignature,
+      _scheme,
+    );
+    return _spans.build(inputs, () => _buildSpan(style, withComposing));
+  }
+
+  TextSpan _buildSpan(TextStyle? style, bool withComposing) {
     final hidden = hiddenChars;
     if (withComposing &&
         value.isComposingRangeValid &&
